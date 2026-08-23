@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# OS
+.DS_Store
+
+# Generated types (regenerate via `npm run gen:types` once backend is running)
+# Keep this tracked so the placeholder ships, but expect it to change often
