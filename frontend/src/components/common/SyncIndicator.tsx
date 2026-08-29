@@ -1,45 +1,41 @@
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 
 /**
- * This tiny component carries a lot of narrative weight — it's the UI
- * element judges will be watching during Act 1-3 of the demo. Keep it
- * simple and legible from across a room.
+ * Matches the sync-status pill markup from all four Stitch screens
+ * (mobile header, desktop sidebar, mobile top bar variants). Carries
+ * real narrative weight during the live demo — keep it legible from
+ * across a room.
  */
 export function SyncIndicator() {
-  const { isOnline, pending, syncing, lastSyncedAt } = useSyncStatus();
+  const { isOnline, pending, syncing } = useSyncStatus();
 
   if (!isOnline) {
     return (
-      <div role="status" className="sync-indicator sync-indicator--offline">
-        <span className="dot dot--offline" />
-        Offline
-        {pending > 0 && ` — ${pending} record${pending === 1 ? "" : "s"} waiting to sync`}
+      <div className="flex items-center gap-xs bg-surface-container-low border border-outline-variant px-sm py-xs rounded-full">
+        <div className="w-2 h-2 rounded-full bg-error" />
+        <span className="font-label-sm text-label-sm text-on-surface-variant">
+          Offline
+          {pending > 0 && ` — ${pending} record${pending === 1 ? "" : "s"} waiting to sync`}
+        </span>
       </div>
     );
   }
 
   if (syncing) {
     return (
-      <div role="status" className="sync-indicator sync-indicator--syncing">
-        <span className="dot dot--syncing" />
-        Syncing {pending} record{pending === 1 ? "" : "s"}...
-      </div>
-    );
-  }
-
-  if (pending === 0 && lastSyncedAt) {
-    return (
-      <div role="status" className="sync-indicator sync-indicator--synced">
-        <span className="dot dot--synced" />
-        All records synchronized
+      <div className="flex items-center gap-xs bg-surface-container-low border border-outline-variant px-sm py-xs rounded-full">
+        <div className="w-2 h-2 rounded-full bg-amber-accent animate-pulse" />
+        <span className="font-label-sm text-label-sm text-on-surface-variant">
+          Syncing {pending} record{pending === 1 ? "" : "s"}...
+        </span>
       </div>
     );
   }
 
   return (
-    <div role="status" className="sync-indicator">
-      <span className="dot dot--synced" />
-      Online
+    <div className="flex items-center gap-xs bg-surface-container-low border border-outline-variant px-sm py-xs rounded-full">
+      <div className="w-2 h-2 rounded-full bg-green-accent" />
+      <span className="font-label-sm text-label-sm text-on-surface-variant">Online</span>
     </div>
   );
 }

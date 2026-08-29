@@ -42,7 +42,7 @@ export class CareContinuityDB extends Dexie {
     this.version(1).stores({
       patients: "id, fullName, villageOrWard",
       careEpisodes: "id, patientId, status, syncStatus",
-      triageAssessments: "id, careEpisodeId, riskLevel, syncStatus",
+      triageAssessments: "id, careEpisodeId, clinicalRiskLevel, syncStatus",
       referrals: "id, careEpisodeId, patientId, currentState, syncStatus",
       referralTransitions: "id, referralId, toState, changedAt",
       // ++id = auto-increment primary key for the queue itself

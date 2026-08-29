@@ -1,17 +1,32 @@
-node_modules
-dist
-dist-ssr
-*.local
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Environment
 .env
 .env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing
+coverage/
 
 # Editor
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 
-# OS
+# Operating system
 .DS_Store
-
-# Generated types (regenerate via `npm run gen:types` once backend is running)
-# Keep this tracked so the placeholder ships, but expect it to change often
+Thumbs.db

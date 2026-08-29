@@ -36,3 +36,6 @@ Thumbs.db
 # Generated secrets
 *.pem
 *.key
+
+# TypeScript build info
+*.tsbuildinfo
