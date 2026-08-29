@@ -1,16 +1,20 @@
 /**
- * Deliberately thin. The real safety net here isn't this file â€” it's that
+ * Deliberately thin. The real safety net here isn't this file — it's that
  * `npm run gen:types` regenerates src/generated/api-types.ts directly from
  * FastAPI's live OpenAPI schema. If the backend renames a field or changes
- * a type, this becomes a TypeScript compile error, not a runtime bug
- * discovered during a demo. See Build Guide Section 7 / Section 8 Stage C.
+ * a type, this becomes a TypeScript compile error, not a runtime bug.
+ *
+ * API base URL is configurable through VITE_API_BASE_URL so the same
+ * frontend can run behind Docker, a development proxy, or production
+ * infrastructure without changing source code.
  */
 
-const BASE_URL = "/api"; // proxied to FastAPI in dev, see vite.config.ts
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
+    this.name = "ApiError";
   }
 }
 
@@ -19,21 +23,26 @@ async function request<T>(
   path: string,
   body?: unknown
 ): Promise<T> {
+  const token = getToken();
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
-      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new ApiError(res.status, text);
+    throw new ApiError(res.status, text || res.statusText);
   }
 
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   return (await res.json()) as T;
 }
 
