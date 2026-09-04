@@ -36,7 +36,7 @@ export function ContinuityOverview({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
-      <MetricCard label="Total Referrals" value={totalReferrals.toLocaleString()} icon="sync_alt" />
+     <MetricCard label="Total Patient Referrals" value={totalReferrals.toLocaleString()} icon="sync_alt" />
       <MetricCard label="Accepted" value={accepted.toLocaleString()} icon="thumb_up" />
       <MetricCard label="Completed" value={completed.toLocaleString()} icon="check_circle" />
       <MetricCard
