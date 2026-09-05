@@ -1,11 +1,11 @@
 """
 Import every model here so Alembic's env.py (which imports this module)
-sees the full metadata for autogenerate. Forgetting to add a new model to
-this file is a classic silent-migration-bug source — keep this list
-exhaustive as the schema grows.
+sees the full metadata for autogenerate. Keep this list exhaustive.
 """
 from app.models.user import User, UserRole  # noqa: F401
-from app.models.facility import Facility, FacilityType, AvailabilityLevel  # noqa: F401
+from app.models.geography import District, Subdistrict, Block, LocalBody, Location  # noqa: F401
+from app.models.facility import Facility, FacilityType, AvailabilityLevel, CoordinateStatus  # noqa: F401
+from app.models.facility_service import FacilityService, CapacityStatus  # noqa: F401
 from app.models.patient import Patient, Sex  # noqa: F401
 from app.models.care_episode import CareEpisode, CareEpisodeStatus  # noqa: F401
 from app.models.encounter import Encounter  # noqa: F401
