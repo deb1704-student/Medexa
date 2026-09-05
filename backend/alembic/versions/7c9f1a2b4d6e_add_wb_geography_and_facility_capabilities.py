@@ -35,10 +35,8 @@ def upgrade() -> None:
         sa.Column("name", sa.String(150), nullable=False),
         sa.Column("subdistrict_code", sa.String(20), nullable=False, unique=True),
     )
-    op.create_index("ix_subdistricts_district_id", "subdistricts", ["district_id"])
-    op.create_index("ix_subdistricts_district_code", "subdistricts", ["district_code"])
-    op.create_index("ix_subdistricts_name", "subdistricts", ["name"])
-    op.create_index("ix_subdistricts_subdistrict_code", "subdistricts", ["subdistrict_code"], unique=True)
+    for column in ("district_id", "district_code", "name", "subdistrict_code"):
+        op.create_index(f"ix_subdistricts_{column}", "subdistricts", [column], unique=column == "subdistrict_code")
 
     op.create_table(
         "blocks",
@@ -48,10 +46,8 @@ def upgrade() -> None:
         sa.Column("name", sa.String(150), nullable=False),
         sa.Column("block_code", sa.String(20), nullable=False, unique=True),
     )
-    op.create_index("ix_blocks_district_id", "blocks", ["district_id"])
-    op.create_index("ix_blocks_district_code", "blocks", ["district_code"])
-    op.create_index("ix_blocks_name", "blocks", ["name"])
-    op.create_index("ix_blocks_block_code", "blocks", ["block_code"], unique=True)
+    for column in ("district_id", "district_code", "name", "block_code"):
+        op.create_index(f"ix_blocks_{column}", "blocks", [column], unique=column == "block_code")
 
     op.create_table(
         "local_bodies",
@@ -61,10 +57,8 @@ def upgrade() -> None:
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("localbody_code", sa.String(20), nullable=False, unique=True),
     )
-    op.create_index("ix_local_bodies_district_id", "local_bodies", ["district_id"])
-    op.create_index("ix_local_bodies_district_code", "local_bodies", ["district_code"])
-    op.create_index("ix_local_bodies_name", "local_bodies", ["name"])
-    op.create_index("ix_local_bodies_localbody_code", "local_bodies", ["localbody_code"], unique=True)
+    for column in ("district_id", "district_code", "name", "localbody_code"):
+        op.create_index(f"ix_local_bodies_{column}", "local_bodies", [column], unique=column == "localbody_code")
 
     op.create_table(
         "locations",
@@ -84,11 +78,17 @@ def upgrade() -> None:
         sa.Column("village_status", sa.String(50), nullable=True),
         sa.Column("census_2011_code", sa.String(40), nullable=True),
     )
-    for column in [
+    for column in (
         "district_id", "district_code", "subdistrict_id", "subdistrict_code",
         "block_id", "block_code", "local_body_id", "localbody_code", "village_code", "name"
-    ]:
+    ):
         op.create_index(f"ix_locations_{column}", "locations", [column])
+
+    # PostgreSQL enum types cannot safely be replaced by SQLAlchemy's ALTER
+    # TYPE machinery here. Add only the new values; existing rows retain their
+    # original enum values without a table rewrite.
+    op.execute("ALTER TYPE facilitytype ADD VALUE IF NOT EXISTS 'CHC'")
+    op.execute("ALTER TYPE facilitytype ADD VALUE IF NOT EXISTS 'STATE_HOSPITAL'")
 
     op.add_column("facilities", sa.Column("ownership", sa.String(100), nullable=True))
     op.add_column("facilities", sa.Column("district_mapping_confident", sa.Boolean(), nullable=True))
@@ -112,9 +112,6 @@ def upgrade() -> None:
     op.add_column("facilities", sa.Column("emergency_number", sa.String(50), nullable=True))
     op.add_column("facilities", sa.Column("website", sa.String(500), nullable=True))
     op.add_column("facilities", sa.Column("specialties_raw", sa.String(4000), nullable=True))
-
-    facility_type_enum = sa.Enum("SUB_CENTRE", "PHC", "CHC", "RURAL_HOSPITAL", "STATE_HOSPITAL", "DISTRICT_HOSPITAL", name="facilitytype")
-    op.alter_column("facilities", "facility_type", type_=facility_type_enum, existing_type=sa.Enum("SUB_CENTRE", "PHC", "RURAL_HOSPITAL", "DISTRICT_HOSPITAL", name="facilitytype"), existing_nullable=False, nullable=True)
     op.create_index("ix_facilities_subdistrict", "facilities", ["subdistrict"])
     op.create_index("ix_facilities_pincode", "facilities", ["pincode"])
     op.create_index("ix_facilities_coordinate_status", "facilities", ["coordinate_status"])
@@ -138,20 +135,19 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("facility_services")
-    for index in [
+    for index in (
         "ix_facilities_source_record_id", "ix_facilities_source", "ix_facilities_coordinate_status",
         "ix_facilities_pincode", "ix_facilities_subdistrict"
-    ]:
+    ):
         op.drop_index(index, table_name="facilities")
-    for column in [
+    for column in (
         "specialties_raw", "website", "emergency_number", "mobile_number", "telephone",
         "medicine_system", "facility_care_type", "facility_category", "verification_status",
         "source_record_id", "source", "coordinate_source", "coordinate_confidence",
         "coordinate_status", "pincode", "subdistrict", "district_mapping_confident", "ownership"
-    ]:
+    ):
         op.drop_column("facilities", column)
     op.execute("DROP TYPE IF EXISTS coordinatestatus")
-
     op.drop_table("locations")
     op.drop_table("local_bodies")
     op.drop_table("blocks")
