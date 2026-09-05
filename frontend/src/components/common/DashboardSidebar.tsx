@@ -19,6 +19,26 @@ const NAV_ITEMS = [
     path: "/dashboard/facilities",
   },
   {
+    label: "Medicines",
+    icon: "medication",
+    path: "/dashboard/medicines",
+  },
+  {
+    label: "Diagnostics",
+    icon: "biotech",
+    path: "/dashboard/diagnostics",
+  },
+  {
+    label: "Appointments",
+    icon: "calendar_month",
+    path: "/dashboard/appointments",
+  },
+  {
+    label: "High-Risk Follow-up",
+    icon: "priority_high",
+    path: "/dashboard/follow-up",
+  },
+  {
     label: "Reports",
     icon: "analytics",
     path: "/dashboard/reports",
@@ -29,10 +49,10 @@ export function DashboardSidebar() {
   return (
     <aside className="fixed left-0 top-0 hidden h-screen w-64 flex-col border-r border-outline-variant bg-surface md:flex">
 
-      {/* Logo */}
+      {/* BRAND */}
       <div className="px-6 py-8">
         <Link to="/" className="block">
-        <BrandMark showSubtitle={true} />
+          <BrandMark showSubtitle={true} />
         </Link>
 
         <p className="mt-2 text-sm text-on-surface-variant">
@@ -40,9 +60,11 @@ export function DashboardSidebar() {
         </p>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-4">
+      {/* NAVIGATION */}
+      <nav className="flex-1 overflow-y-auto px-4">
+
         <div className="space-y-2">
+
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.label}
@@ -65,11 +87,13 @@ export function DashboardSidebar() {
               </span>
             </NavLink>
           ))}
+
         </div>
+
       </nav>
 
-      {/* Sync */}
-      <div className="px-4 pb-6">
+      {/* SYNC STATUS */}
+      <div className="px-4 pb-6 pt-4">
         <SyncIndicator />
       </div>
 

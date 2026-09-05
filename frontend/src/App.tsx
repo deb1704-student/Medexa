@@ -6,6 +6,10 @@ import { DigitalTriagePage } from "@/pages/DigitalTriagePage";
 import { ReferralsPage } from "@/pages/ReferralsPage";
 import { ReferralDetailsPage } from "@/pages/ReferralDetailsPage";
 import { FacilitiesPage } from "@/pages/FacilitiesPage";
+import { MedicineAvailabilityPage } from "@/pages/MedicineAvailabilityPage";
+import { DiagnosticsPage } from "@/pages/DiagnosticsPage";
+import { AppointmentsPage } from "@/pages/AppointmentsPage";
+import { HighRiskFollowUpPage } from "@/pages/HighRiskFollowUpPage";
 import { ReportsPage } from "@/pages/ReportsPage";
 
 import { BrandMark } from "@/components/common/BrandMark";
@@ -47,7 +51,25 @@ export function App() {
           path="/dashboard/facilities"
           element={<FacilitiesPage />}
         />
+        <Route
+        path="/dashboard/medicines"
+        element={<MedicineAvailabilityPage />}
+        />
 
+        <Route
+        path="/dashboard/diagnostics"
+        element={<DiagnosticsPage />}
+        />
+
+        <Route
+        path="/dashboard/appointments"
+        element={<AppointmentsPage />}
+        />
+
+        <Route
+        path="/dashboard/follow-up"
+        element={<HighRiskFollowUpPage />}
+        />
         <Route
           path="/dashboard/reports"
           element={<ReportsPage />}
