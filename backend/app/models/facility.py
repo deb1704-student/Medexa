@@ -25,6 +25,7 @@ class AvailabilityLevel(str, enum.Enum):
 
 class CoordinateStatus(str, enum.Enum):
     PRESENT = "present"
+    MISSING_IN_SUPPLIED_SOURCE = "missing_in_supplied_source"
     MISSING_OR_INVALID = "missing_or_invalid"
 
 
