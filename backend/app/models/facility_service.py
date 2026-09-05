@@ -12,6 +12,7 @@ class CapacityStatus(str, enum.Enum):
     AVAILABLE = "available"
     LIMITED = "limited"
     FULL = "full"
+    UNKNOWN = "unknown"
 
 
 class FacilityService(Base, UUIDPrimaryKeyMixin):
