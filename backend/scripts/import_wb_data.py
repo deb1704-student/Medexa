@@ -18,7 +18,6 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
@@ -44,7 +43,7 @@ def bool_value(value: str | None) -> bool:
 
 def enum_or_none(enum_cls, value: str | None):
     value = clean(value)
-    return enum_cls(value) if value else None
+    return enum_cls(value.lower()) if value else None
 
 
 def dt(value: str | None) -> datetime:
@@ -64,6 +63,10 @@ async def upsert_by_id(db: AsyncSession, model, row_id: str, values: dict):
         for key, value in values.items():
             setattr(obj, key, value)
     return obj
+
+
+def is_empty_geography_row(row: dict[str, str], code_key: str, name_key: str) -> bool:
+    return not clean(row.get(code_key)) and not clean(row.get(name_key))
 
 
 async def import_data(data_dir: Path) -> None:
@@ -91,26 +94,32 @@ async def import_data(data_dir: Path) -> None:
 
             district_ids = {r["district_code"]: r["district_code"] for r in districts}
             for row in subdistricts:
+                if is_empty_geography_row(row, "subdistrict_code", "subdistrict_name"):
+                    continue
                 await upsert_by_id(db, Subdistrict, clean(row["subdistrict_code"]), {
                     "district_id": district_ids[clean(row["district_code"])],
                     "district_code": clean(row["district_code"]),
-                    "name": clean(row["subdistrict_name"]) or "Unknown",
+                    "name": clean(row["subdistrict_name"]),
                     "subdistrict_code": clean(row["subdistrict_code"]),
                 })
 
             for row in blocks:
+                if is_empty_geography_row(row, "block_code", "block_name"):
+                    continue
                 await upsert_by_id(db, Block, clean(row["block_code"]), {
                     "district_id": district_ids[clean(row["district_code"])],
                     "district_code": clean(row["district_code"]),
-                    "name": clean(row["block_name"]) or "Unknown",
+                    "name": clean(row["block_name"]),
                     "block_code": clean(row["block_code"]),
                 })
 
             for row in local_bodies:
+                if is_empty_geography_row(row, "localbody_code", "localbody_name"):
+                    continue
                 await upsert_by_id(db, LocalBody, clean(row["localbody_code"]), {
                     "district_id": district_ids[clean(row["district_code"])],
                     "district_code": clean(row["district_code"]),
-                    "name": clean(row["localbody_name"]) or "Unknown",
+                    "name": clean(row["localbody_name"]),
                     "localbody_code": clean(row["localbody_code"]),
                 })
 
@@ -138,7 +147,7 @@ async def import_data(data_dir: Path) -> None:
                 lon = float(row["longitude"]) if clean(row["longitude"]) else None
                 values = {
                     "name": clean(row["name"]) or "Unnamed facility",
-                    "facility_type": enum_or_none(FacilityType, facility_type.lower() if facility_type else None),
+                    "facility_type": enum_or_none(FacilityType, facility_type),
                     "ownership": clean(row["ownership"]),
                     "district": clean(row["district"]),
                     "district_mapping_confident": bool_value(row["district_mapping_confident"]),
@@ -146,7 +155,7 @@ async def import_data(data_dir: Path) -> None:
                     "pincode": clean(row["pincode"]),
                     "latitude": lat,
                     "longitude": lon,
-                    "coordinate_status": CoordinateStatus(clean(row["coordinate_status"])),
+                    "coordinate_status": enum_or_none(CoordinateStatus, row["coordinate_status"]),
                     "coordinate_confidence": clean(row["coordinate_confidence"]),
                     "coordinate_source": clean(row["coordinate_source"]),
                     "source": clean(row["source"]),
@@ -160,9 +169,9 @@ async def import_data(data_dir: Path) -> None:
                     "emergency_number": clean(row["emergency_number"]),
                     "website": clean(row["website"]),
                     "specialties_raw": clean(row["specialties_raw"]),
-                    "service_availability": AvailabilityLevel(clean(row["service_availability_default"])),
-                    "diagnostic_availability": AvailabilityLevel(clean(row["diagnostic_availability_default"])),
-                    "medicine_availability": AvailabilityLevel(clean(row["medicine_availability_default"])),
+                    "service_availability": enum_or_none(AvailabilityLevel, row["service_availability_default"]),
+                    "diagnostic_availability": enum_or_none(AvailabilityLevel, row["diagnostic_availability_default"]),
+                    "medicine_availability": enum_or_none(AvailabilityLevel, row["medicine_availability_default"]),
                 }
                 await upsert_by_id(db, Facility, clean(row["id"]), values)
 
@@ -174,7 +183,7 @@ async def import_data(data_dir: Path) -> None:
                     "facility_id": clean(row["facility_id"]),
                     "service_name": clean(row["service_name"]) or "Unknown",
                     "available": bool_value(row["available"]),
-                    "capacity_status": CapacityStatus(clean(row["capacity_status"])),
+                    "capacity_status": enum_or_none(CapacityStatus, row["capacity_status"]),
                     "last_updated": dt(row["last_updated"]) if clean(row["last_updated"]) else now,
                 }
                 if obj is None:
@@ -185,9 +194,9 @@ async def import_data(data_dir: Path) -> None:
 
         print("West Bengal master-data import completed successfully.")
         print(f"  districts:      {len(districts):>6}")
-        print(f"  subdistricts:   {len(subdistricts):>6}")
-        print(f"  blocks:          {len(blocks):>6}")
-        print(f"  local bodies:    {len(local_bodies):>6}")
+        print(f"  subdistricts:   {sum(not is_empty_geography_row(r, 'subdistrict_code', 'subdistrict_name') for r in subdistricts):>6}")
+        print(f"  blocks:         {sum(not is_empty_geography_row(r, 'block_code', 'block_name') for r in blocks):>6}")
+        print(f"  local bodies:   {sum(not is_empty_geography_row(r, 'localbody_code', 'localbody_name') for r in local_bodies):>6}")
         print(f"  locations:      {len(locations):>6}")
         print(f"  facilities:     {len(facilities):>6}")
         print(f"  services:       {len(services):>6}")
