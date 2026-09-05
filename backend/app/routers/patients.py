@@ -56,7 +56,11 @@ async def create_patient(
 
 
 @router.get("/{patient_id}", response_model=PatientOut)
-async def get_patient(patient_id: str, db: AsyncSession = Depends(get_db)):
+async def get_patient(
+    patient_id: str,
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     patient = await db.get(Patient, patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -66,11 +70,13 @@ async def get_patient(patient_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("", response_model=list[PatientOut])
 async def search_patients(
     q: str | None = None,
+    current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Simple name/village search — sufficient for the demo; a production
     version would add full-text search, not in scope per Build Guide's
-    exclusion list."""
+    exclusion list.
+    """
     stmt = select(Patient)
     if q:
         stmt = stmt.where(Patient.full_name.ilike(f"%{q}%"))
