@@ -37,9 +37,8 @@ EXPECTED = {
 }
 FACILITY_TYPES = {"sub_centre", "phc", "chc", "rural_hospital", "state_hospital", "district_hospital"}
 AVAILABILITY = {"available", "limited", "unavailable"}
-CAPACITY = {"available", "limited", "full"}
+CAPACITY = {"available", "limited", "full", "unknown"}
 COORD_STATUS = {"present", "missing_in_supplied_source", "missing_or_invalid"}
-
 GEOGRAPHY_KEYS = {
     "subdistricts": ("subdistrict_code", "subdistrict_name"),
     "blocks": ("block_code", "block_name"),
@@ -104,17 +103,11 @@ def validate(data_dir: Path) -> int:
         return report(loaded, errors, warnings, skipped)
 
     districts = unique(loaded["medexa_districts.csv"], "district_code", "districts", errors)
-    subdistricts = unique(
-        loaded["medexa_subdistricts.csv"], "subdistrict_code", "subdistricts", errors, skipped, "subdistrict_name"
-    )
-    blocks = unique(
-        loaded["medexa_blocks.csv"], "block_code", "blocks", errors, skipped, "block_name"
-    )
-    localbodies = unique(
-        loaded["medexa_local_bodies.csv"], "localbody_code", "local bodies", errors, skipped, "localbody_name"
-    )
-    locations = unique(loaded["medexa_locations.csv"], "location_id", "locations", errors)
+    subdistricts = unique(loaded["medexa_subdistricts.csv"], "subdistrict_code", "subdistricts", errors, skipped, "subdistrict_name")
+    blocks = unique(loaded["medexa_blocks.csv"], "block_code", "blocks", errors, skipped, "block_name")
+    localbodies = unique(loaded["medexa_local_bodies.csv"], "localbody_code", "local bodies", errors, skipped, "localbody_name")
     facilities = unique(loaded["medexa_facilities.csv"], "id", "facilities", errors)
+    unique(loaded["medexa_locations.csv"], "location_id", "locations", errors)
 
     for label, data, key in [
         ("subdistricts", loaded["medexa_subdistricts.csv"], "district_code"),
@@ -146,7 +139,7 @@ def validate(data_dir: Path) -> int:
             errors.append(f"facilities: row {n} unknown facility_type={ftype!r}")
         coord_status = norm(row.get("coordinate_status")).lower()
         if coord_status not in COORD_STATUS:
-            errors.append(f"facilities: row {n} unknown coordinate_status={coord_status!r}")
+            errors.append(f"facilities: row {n} unknown coordinate_status={row.get('coordinate_status')!r}")
         lat, lon = norm(row.get("latitude")), norm(row.get("longitude"))
         if coord_status == "present":
             try:
@@ -177,7 +170,8 @@ def validate(data_dir: Path) -> int:
             if pair in seen_pairs:
                 errors.append(f"facility services: duplicate facility/service pair at row {n}")
             seen_pairs.add(pair)
-            if norm(row.get("capacity_status")).lower() not in CAPACITY:
+            value = norm(row.get("capacity_status")).lower()
+            if value not in CAPACITY:
                 errors.append(f"facility services: row {n} unknown capacity_status={row.get('capacity_status')!r}")
 
     return report(loaded, errors, warnings, skipped)
