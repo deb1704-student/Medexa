@@ -37,8 +37,14 @@ EXPECTED = {
 }
 FACILITY_TYPES = {"sub_centre", "phc", "chc", "rural_hospital", "state_hospital", "district_hospital"}
 AVAILABILITY = {"available", "limited", "unavailable"}
-CAPACITY = {"AVAILABLE", "LIMITED", "FULL"}
-COORD_STATUS = {"PRESENT", "MISSING_OR_INVALID"}
+CAPACITY = {"available", "limited", "full"}
+COORD_STATUS = {"present", "missing_in_supplied_source", "missing_or_invalid"}
+
+GEOGRAPHY_KEYS = {
+    "subdistricts": ("subdistrict_code", "subdistrict_name"),
+    "blocks": ("block_code", "block_name"),
+    "local bodies": ("localbody_code", "localbody_name"),
+}
 
 
 def rows(path: Path):
@@ -58,10 +64,18 @@ def norm(v: str | None) -> str:
     return (v or "").strip()
 
 
-def unique(rows_, key: str, label: str, errors: list[str]):
+def is_empty_geography_row(row: dict[str, str], code_key: str, name_key: str) -> bool:
+    return not norm(row.get(code_key)) and not norm(row.get(name_key))
+
+
+def unique(rows_, key: str, label: str, errors: list[str], skipped: dict[str, int] | None = None, name_key: str | None = None):
     seen: set[str] = set()
     for n, row in enumerate(rows_, 2):
         value = norm(row.get(key))
+        if not value and name_key and not norm(row.get(name_key)):
+            if skipped is not None:
+                skipped[label] = skipped.get(label, 0) + 1
+            continue
         if not value:
             errors.append(f"{label}: row {n} has empty {key}")
         elif value in seen:
@@ -73,6 +87,7 @@ def unique(rows_, key: str, label: str, errors: list[str]):
 def validate(data_dir: Path) -> int:
     errors: list[str] = []
     warnings: list[str] = []
+    skipped: dict[str, int] = {}
     loaded: dict[str, list[dict[str, str]]] = {}
 
     for filename in EXPECTED:
@@ -86,12 +101,18 @@ def validate(data_dir: Path) -> int:
             errors.append(str(exc))
 
     if errors:
-        return report(loaded, errors, warnings)
+        return report(loaded, errors, warnings, skipped)
 
     districts = unique(loaded["medexa_districts.csv"], "district_code", "districts", errors)
-    subdistricts = unique(loaded["medexa_subdistricts.csv"], "subdistrict_code", "subdistricts", errors)
-    blocks = unique(loaded["medexa_blocks.csv"], "block_code", "blocks", errors)
-    localbodies = unique(loaded["medexa_local_bodies.csv"], "localbody_code", "local bodies", errors)
+    subdistricts = unique(
+        loaded["medexa_subdistricts.csv"], "subdistrict_code", "subdistricts", errors, skipped, "subdistrict_name"
+    )
+    blocks = unique(
+        loaded["medexa_blocks.csv"], "block_code", "blocks", errors, skipped, "block_name"
+    )
+    localbodies = unique(
+        loaded["medexa_local_bodies.csv"], "localbody_code", "local bodies", errors, skipped, "localbody_name"
+    )
     locations = unique(loaded["medexa_locations.csv"], "location_id", "locations", errors)
     facilities = unique(loaded["medexa_facilities.csv"], "id", "facilities", errors)
 
@@ -102,16 +123,19 @@ def validate(data_dir: Path) -> int:
         ("locations", loaded["medexa_locations.csv"], "district_code"),
     ]:
         for n, row in enumerate(data, 2):
+            if label in GEOGRAPHY_KEYS:
+                code_key, name_key = GEOGRAPHY_KEYS[label]
+                if is_empty_geography_row(row, code_key, name_key):
+                    continue
             if norm(row.get(key)) not in districts:
                 errors.append(f"{label}: row {n} references unknown district_code={row.get(key)!r}")
 
     for n, row in enumerate(loaded["medexa_locations.csv"], 2):
-        checks = [
+        for key, known in [
             ("subdistrict_code", subdistricts),
             ("block_code", blocks),
             ("localbody_code", localbodies),
-        ]
-        for key, known in checks:
+        ]:
             value = norm(row.get(key))
             if value and value not in known:
                 errors.append(f"locations: row {n} references unknown {key}={value!r}")
@@ -120,11 +144,11 @@ def validate(data_dir: Path) -> int:
         ftype = norm(row.get("facility_type")).lower()
         if ftype and ftype not in FACILITY_TYPES:
             errors.append(f"facilities: row {n} unknown facility_type={ftype!r}")
-        coord_status = norm(row.get("coordinate_status"))
+        coord_status = norm(row.get("coordinate_status")).lower()
         if coord_status not in COORD_STATUS:
             errors.append(f"facilities: row {n} unknown coordinate_status={coord_status!r}")
         lat, lon = norm(row.get("latitude")), norm(row.get("longitude"))
-        if coord_status == "PRESENT":
+        if coord_status == "present":
             try:
                 lat_f, lon_f = float(lat), float(lon)
                 if not (-90 <= lat_f <= 90 and -180 <= lon_f <= 180):
@@ -143,7 +167,7 @@ def validate(data_dir: Path) -> int:
     service_file = data_dir / "medexa_synthetic_facility_services.csv"
     if service_file.exists():
         services = list(rows(service_file))
-        service_ids = unique(services, "facility_service_id", "facility services", errors)
+        unique(services, "facility_service_id", "facility services", errors)
         seen_pairs: set[tuple[str, str]] = set()
         for n, row in enumerate(services, 2):
             fid, name = norm(row.get("facility_id")), norm(row.get("service_name"))
@@ -153,18 +177,23 @@ def validate(data_dir: Path) -> int:
             if pair in seen_pairs:
                 errors.append(f"facility services: duplicate facility/service pair at row {n}")
             seen_pairs.add(pair)
-            if norm(row.get("capacity_status")) not in CAPACITY:
+            if norm(row.get("capacity_status")).lower() not in CAPACITY:
                 errors.append(f"facility services: row {n} unknown capacity_status={row.get('capacity_status')!r}")
 
-    return report(loaded, errors, warnings)
+    return report(loaded, errors, warnings, skipped)
 
 
-def report(loaded, errors, warnings) -> int:
+def report(loaded, errors, warnings, skipped) -> int:
     print("West Bengal Dataset Validation")
     print("=" * 48)
     for filename, data in loaded.items():
         print(f"{filename:<44} {len(data):>7}")
     print("-" * 48)
+    if skipped:
+        print("Skipped completely empty source rows")
+        for label, count in skipped.items():
+            print(f"  {label:<38} {count:>7}")
+        print("-" * 48)
     print(f"Warnings                                  {len(warnings):>7}")
     print(f"Errors                                    {len(errors):>7}")
     if warnings:
