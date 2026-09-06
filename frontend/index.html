@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#005c55" />
+    <title>Medexa — Healthcare Continuity Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@100..900&family=Plus+Jakarta+Sans:wght@100..900&family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Sans+Gujarati:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Malayalam:wght@400;600;700&family=Noto+Sans+Oriya:wght@400;600;700&family=Noto+Sans+Gurmukhi:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .goog-te-banner-frame,
+      .goog-te-balloon-frame,
+      .goog-te-spinner-pos,
+      #goog-gt-tt {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      body {
+        top: 0px !important;
+        position: static !important;
+      }
+      .goog-tooltip,
+      .goog-tooltip:hover {
+        display: none !important;
+      }
+      .goog-text-highlight {
+        background-color: transparent !important;
+        box-shadow: none !important;
+      }
+      #google_translate_element {
+        display: none !important;
+        visibility: hidden !important;
+        position: absolute !important;
+        top: -9999px !important;
+        left: -9999px !important;
+      }
+      .skiptranslate {
+        display: none !important;
+      }
+      body > .skiptranslate {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="google_translate_element"></div>
+    <div id="root"></div>
+    <script type="text/javascript">
+      function googleTranslateElementInit() {
+        if (window.google && window.google.translate) {
+          new window.google.translate.TranslateElement(
+            {
+              pageLanguage: 'en',
+              includedLanguages: 'en,hi,bn,ta,te,mr,gu,kn,ml,or,pa,as',
+              autoDisplay: false,
+              layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE
+            },
+            'google_translate_element'
+          );
+        }
+      }
+    </script>
+    <script
+      type="text/javascript"
+      src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"
+      async
+      defer
+    ></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
