@@ -1,25 +1,47 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { TriageForm } from "@/components/triage/TriageForm";
+import type { ClinicalRiskLevelT } from "@/models/careEpisode";
+import { LanguageSelector } from "@/components/common/LanguageSelector";
+import { useLanguageStore } from "@/i18n/useLanguageStore";
 
-export function DigitalTriagePage() {
-  const { careEpisodeId } = useParams<{
+export interface DigitalTriagePageProps {
+  embedded?: boolean;
+  careEpisodeId?: string;
+  workerId?: string;
+  patientData?: {
+    id: string;
+    name: string;
+    ageGender?: string;
+  };
+  onComplete?: (riskLevel: ClinicalRiskLevelT, assessment?: any) => void;
+}
+
+export function DigitalTriagePage({
+  embedded = false,
+  careEpisodeId: propEpisodeId,
+  workerId: propWorkerId,
+  patientData,
+  onComplete,
+}: DigitalTriagePageProps = {}) {
+  const { tPortal, language } = useLanguageStore();
+  const params = useParams<{
     careEpisodeId: string;
   }>();
 
   const episodeId =
-    careEpisodeId || "550e8400-e29b-41d4-a716-446655440002";
+    propEpisodeId || params.careEpisodeId || "550e8400-e29b-41d4-a716-446655440002";
 
-  const workerId = "worker-demo-001";
+  const workerId = propWorkerId || "worker-demo-001";
 
   // Patient details
-  const [patientId, setPatientId] = useState("");
-  const [patientName, setPatientName] = useState("");
+  const [patientId, setPatientId] = useState(patientData?.id || "");
+  const [patientName, setPatientName] = useState(patientData?.name || "");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
 
   // Patient details submitted state
-  const [patientSubmitted, setPatientSubmitted] = useState(false);
+  const [patientSubmitted, setPatientSubmitted] = useState(Boolean(patientData));
 
   // Validation message
   const [patientError, setPatientError] = useState("");
@@ -54,6 +76,40 @@ export function DigitalTriagePage() {
     }, 100);
   };
 
+  // If embedded directly inside Care Episode (§5.3)
+  if (embedded) {
+    return (
+      <div className="rounded-3xl border border-outline-variant bg-surface p-5 sm:p-7 shadow-sm">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+              <span className="material-symbols-outlined text-2xl">stethoscope</span>
+            </div>
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                Care Episode Stage 1
+              </span>
+              <h3 className="text-lg font-bold text-on-surface">Digital Triage Assessment</h3>
+            </div>
+          </div>
+          <span className="rounded-full bg-surface-container px-3 py-1 text-xs font-medium text-on-surface-variant">
+            Assessment ID: <span className="font-mono">{episodeId.slice(0, 8)}...</span>
+          </span>
+        </div>
+
+        <TriageForm
+          careEpisodeId={episodeId}
+          workerId={workerId}
+          onSubmitted={(riskLevel, assessment) => {
+            if (onComplete) {
+              onComplete(riskLevel, assessment);
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
 
@@ -79,7 +135,7 @@ export function DigitalTriagePage() {
               </div>
 
               <div className="text-xs text-teal-100">
-                Digital Triage
+                {tPortal("digitalTriage", "Digital Triage", language)}
               </div>
 
             </div>
@@ -87,16 +143,16 @@ export function DigitalTriagePage() {
           </Link>
 
 
-          <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-white">
-
-            <span className="material-symbols-outlined text-[19px]">
-              cloud_off
-            </span>
-
-            <span className="hidden text-sm font-medium sm:block">
-              Offline-ready
-            </span>
-
+          <div className="flex items-center gap-3">
+            <LanguageSelector />
+            <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-white">
+              <span className="material-symbols-outlined text-[19px]">
+                cloud_off
+              </span>
+              <span className="hidden text-sm font-medium sm:block">
+                Offline-ready
+              </span>
+            </div>
           </div>
 
         </div>
@@ -563,162 +619,46 @@ export function DigitalTriagePage() {
         </section>
 
 
-        {/* ================= IMPORTANT INFORMATION ================= */}
-        <section className="mb-7 rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-
-          <div className="flex items-start gap-4">
-
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-white">
-
-              <span className="material-symbols-outlined">
-                priority_high
-              </span>
-
-            </div>
-
-
-            <div>
-
-              <h2 className="text-lg font-bold text-amber-950">
-                Complete the assessment carefully
-              </h2>
-
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-900">
-                Record all relevant symptoms and available vital measurements.
-                The clinical risk engine will use this information to determine
-                the patient's risk level.
-              </p>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
         {/* ================= TRIAGE FORM ================= */}
         <section
           id="clinical-assessment"
-          className="overflow-hidden rounded-3xl border border-purple-200 bg-purple-50 shadow-sm"
+          className="overflow-hidden rounded-3xl border border-teal-200 bg-white shadow-sm"
         >
-
           {/* Section Header */}
-          <div className="border-b border-purple-200 bg-purple-100 px-6 py-5">
-
+          <div className="border-b border-teal-100 bg-teal-50/80 px-6 py-5">
             <div className="flex items-center gap-4">
-
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-700 text-white shadow-sm">
-
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-700 text-white shadow-sm">
                 <span className="material-symbols-outlined">
                   stethoscope
                 </span>
-
               </div>
-
 
               <div>
-
-                <p className="text-xs font-bold uppercase tracking-wider text-purple-700">
-                  Clinical Evaluation
+                <p className="text-xs font-bold uppercase tracking-wider text-teal-700">
+                  Frontline Clinical Decision Support
                 </p>
-
-                <h2 className="text-xl font-bold text-purple-950">
-                  Symptoms & Vital Signs
+                <h2 className="text-xl font-bold text-teal-950">
+                  Clinical Assessment & Vitals
                 </h2>
-
-                <p className="mt-1 text-sm text-purple-800">
-                  Enter the available clinical information below.
+                <p className="mt-1 text-sm text-teal-800">
+                  Live risk scoring evaluates symptoms and vital indicators in real-time.
                 </p>
-
               </div>
-
             </div>
-
           </div>
 
-
-          {/* Existing Functional Triage Form */}
+          {/* Functional Triage Form */}
           <div className="p-5 md:p-7">
-
             <TriageForm
               careEpisodeId={episodeId}
               workerId={workerId}
-              onSubmitted={() => {
-                // TriageForm handles saving and risk calculation.
+              onSubmitted={(riskLevel, assessment) => {
+                if (onComplete) {
+                  onComplete(riskLevel, assessment);
+                }
               }}
             />
-
           </div>
-
-        </section>
-
-
-        {/* ================= CLINICAL NOTES ================= */}
-        <section className="mt-7 rounded-3xl border border-yellow-300 bg-yellow-50 p-6 shadow-sm">
-
-          <div className="flex items-start gap-4">
-
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-500 text-white">
-
-              <span className="material-symbols-outlined">
-                edit_note
-              </span>
-
-            </div>
-
-
-            <div>
-
-              <p className="text-xs font-bold uppercase tracking-wider text-yellow-700">
-                Clinical Notes
-              </p>
-
-              <h2 className="mt-1 text-xl font-bold text-yellow-950">
-                Additional observations
-              </h2>
-
-              <p className="mt-2 text-sm leading-6 text-yellow-900">
-                Use the notes section in the assessment above to record
-                important observations, history, or additional clinical
-                information.
-              </p>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* ================= SAFETY MESSAGE ================= */}
-        <section className="mt-7 rounded-3xl border border-red-200 bg-red-50 p-6">
-
-          <div className="flex items-start gap-4">
-
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-
-              <span className="material-symbols-outlined">
-                emergency
-              </span>
-
-            </div>
-
-
-            <div>
-
-              <h2 className="font-bold text-red-950">
-                Emergency symptoms require immediate attention
-              </h2>
-
-              <p className="mt-1 text-sm leading-6 text-red-800">
-                If the assessment indicates an emergency risk level, follow
-                your local emergency referral and clinical escalation protocol.
-              </p>
-
-            </div>
-
-          </div>
-
         </section>
 
       </main>

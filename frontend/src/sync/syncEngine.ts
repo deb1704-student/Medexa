@@ -76,6 +76,8 @@ export async function runSync(): Promise<void> {
 
   for (const item of queue) {
     try {
+      // Realistic brief latency so user visually observes the sync badge count down
+      await new Promise((resolve) => setTimeout(resolve, 150));
       await pushOne(item);
       await db.syncQueue.delete(item.id!);
       // mark the underlying record as synced

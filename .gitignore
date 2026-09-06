@@ -1,41 +1,38 @@
 # Dependencies
 node_modules/
-__pycache__/
-.venv/
-venv/
+*/node_modules/
 
-# Environment
-.env
-.env.*
-!.env.example
-
-# Build
+# Build outputs
 dist/
+dist-ssr/
 build/
-coverage/
 
-# IDE
-.vscode/
-.idea/
+# TypeScript
+*.tsbuildinfo
 
-# OS
-.DS_Store
-Thumbs.db
+# Environment variables
+.env
+.env.local
+.env.*.local
+!.env.example
 
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
 
-# Python
-.pytest_cache/
-.mypy_cache/
+# Testing & Coverage
+coverage/
 
-# Local databases / runtime
-*.sqlite
-*.sqlite3
+# IDE & Editor
+.vscode/
+.idea/
 
-# Generated secrets
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Secrets & Certificates
 *.pem
 *.key
-
-# TypeScript build info
-*.tsbuildinfo

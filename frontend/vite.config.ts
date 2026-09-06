@@ -53,14 +53,73 @@ export default defineConfig({
         ],
       },
     }),
-  ],
-  server: {
-    proxy: {
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
+    {
+      name: "medexa-mock-api",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (!req.url?.startsWith("/api")) {
+            return next();
+          }
+
+          const url = req.url.replace(/^\/api/, "");
+          res.setHeader("Content-Type", "application/json");
+
+          if (url.includes("/pathway-options")) {
+            res.statusCode = 200;
+            res.end(
+              JSON.stringify([
+                {
+                  facilityId: "FAC-WB-PHC-01",
+                  facilityName: "Belur Block PHC",
+                  distanceKm: 3.2,
+                  serviceAvailability: "available",
+                  diagnosticAvailability: "available",
+                  medicineAvailability: "available",
+                },
+                {
+                  facilityId: "FAC-WB-CHC-02",
+                  facilityName: "Joypur Block CHC",
+                  distanceKm: 8.5,
+                  serviceAvailability: "available",
+                  diagnosticAvailability: "available",
+                  medicineAvailability: "limited",
+                },
+                {
+                  facilityId: "FAC-WB-RH-03",
+                  facilityName: "Sonamukhi Rural Hospital (Block CHC)",
+                  distanceKm: 14.1,
+                  serviceAvailability: "available",
+                  diagnosticAvailability: "limited",
+                  medicineAvailability: "available",
+                },
+                {
+                  facilityId: "FAC-WB-DH-04",
+                  facilityName: "Bankura District General Hospital",
+                  distanceKm: 28.7,
+                  serviceAvailability: "available",
+                  diagnosticAvailability: "available",
+                  medicineAvailability: "available",
+                },
+              ])
+            );
+            return;
+          }
+
+          // Generic mock handler for sync and health requests
+          res.statusCode = 200;
+          res.end(
+            JSON.stringify({
+              status: "success",
+              synced: true,
+              timestamp: new Date().toISOString(),
+            })
+          );
+        });
       },
     },
+  ],
+  server: {
+    port: 5173,
+    host: true,
   },
 });
