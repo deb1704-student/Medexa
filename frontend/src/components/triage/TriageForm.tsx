@@ -277,8 +277,8 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
           <button
             type="submit"
             disabled={submitting || symptoms.length === 0}
-            className="w-full h-tap-target-min bg-primary text-on-primary rounded-full font-label-lg text-label-lg hover:bg-surface-tint active:scale-[0.98] transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-sm disabled:opacity-50"
-          >
+           className="w-full h-tap-target-min bg-primary text-on-primary rounded-full font-label-lg text-label-lg hover:bg-surface-tint active:scale-[0.98] transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-sm"
+  >
             <span className="material-symbols-outlined">save</span>
             {submitting ? "Saving..." : "Save Triage Assessment"}
           </button>

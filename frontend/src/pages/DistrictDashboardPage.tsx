@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
+
 import { ContinuityOverview } from "@/components/dashboard/ContinuityOverview";
 import { FacilityContinuityTable } from "@/components/dashboard/FacilityContinuityTable";
-import { SyncIndicator } from "@/components/common/SyncIndicator";
-import { apiClient } from "@/api/client";
+import { DashboardSidebar } from "@/components/common/DashboardSidebar";
 
 interface DashboardData {
   totalReferrals: number;
@@ -14,6 +14,7 @@ interface DashboardData {
   totalEligibleForCompletion: number;
   followUpsDue: number;
   dataFreshnessMinutesAgo: number;
+
   facilities: {
     facilityId: string;
     facilityName: string;
@@ -24,103 +25,159 @@ interface DashboardData {
   }[];
 }
 
-const NAV_ITEMS = [
-  { label: "Overview", icon: "dashboard" },
-  { label: "Referrals", icon: "sync_alt" },
-  { label: "Facilities", icon: "local_hospital" },
-  { label: "Reports", icon: "analytics" },
-];
-
-/**
- * District officer flow — Acts 4-6 of the canonical demo. Sidebar
- * layout matches the Stitch "Continuity Overview" / "Facility
- * Continuity" desktop screens exactly (fixed 256px side nav, main
- * content offset by ml-64).
- */
 export function DistrictDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
 
   useEffect(() => {
-    apiClient
-      .get<DashboardData>("/dashboard/facility")
-      .then(setData)
-      .catch((err) => setError(String(err)));
+    /*
+     * Temporary demo data.
+     *
+     * Later, the backend developer can replace this
+     * with an API request without changing the UI structure.
+     */
+
+    const mockData: DashboardData = {
+      totalReferrals: 150,
+      accepted: 120,
+      completed: 90,
+      followUpCompleted: 75,
+      overdue: 15,
+      noShow: 8,
+      totalEligibleForCompletion: 100,
+      followUpsDue: 100,
+      dataFreshnessMinutesAgo: 2,
+
+      facilities: [
+        {
+          facilityId: "F001",
+          facilityName: "City Hospital",
+          totalReferrals: 50,
+          completionRatePercent: 90,
+          avgReferralDelayHours: 4,
+          followUpCompliancePercent: 85,
+        },
+
+        {
+          facilityId: "F002",
+          facilityName: "Rural Health Center",
+          totalReferrals: 35,
+          completionRatePercent: 75,
+          avgReferralDelayHours: 7,
+          followUpCompliancePercent: 70,
+        },
+
+        {
+          facilityId: "F003",
+          facilityName: "Community Clinic",
+          totalReferrals: 25,
+          completionRatePercent: 68,
+          avgReferralDelayHours: 9,
+          followUpCompliancePercent: 65,
+        },
+      ],
+    };
+
+    setData(mockData);
   }, []);
 
   return (
-    <div className="min-h-screen bg-surface flex">
-      <nav className="hidden md:flex flex-col h-screen w-64 left-0 top-0 fixed border-r border-outline-variant bg-surface-container-low py-xl">
-        <div className="px-lg mb-8">
-          <h2 className="font-headline-sm text-headline-sm font-bold text-primary">Medexa</h2>
-          <p className="font-label-sm text-label-sm text-on-surface-variant">District Dashboard</p>
-        </div>
-        <div className="flex-1 px-4 space-y-2">
-          {NAV_ITEMS.map((item, i) => (
-            <a
-              key={item.label}
-              href="#"
-              className={`flex items-center gap-md px-lg py-sm rounded-full transition-all duration-200 ${
-                i === 0
-                  ? "bg-secondary-container text-on-secondary-container"
-                  : "text-on-surface-variant hover:bg-surface-container-highest"
-              }`}
-            >
-              <span className="material-symbols-outlined">{item.icon}</span>
-              <span className="font-label-lg text-label-lg">{item.label}</span>
-            </a>
-          ))}
-        </div>
-        <div className="px-4 mt-auto">
-          <SyncIndicator />
-        </div>
-      </nav>
+    <div className="min-h-screen bg-surface">
 
-      <main className="flex-1 md:ml-64 p-gutter md:p-container-margin-desktop">
-        <header className="mb-8 flex flex-wrap justify-between items-end gap-md">
-          <div>
-            <h1 className="font-display-lg text-display-lg text-on-surface mb-2">
-              Continuity Overview
-            </h1>
-            <p className="font-body-lg text-body-lg text-on-surface-variant">
-              District-wide referral performance metrics.
-            </p>
-          </div>
-          {data && (
-            <p className="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px] text-primary filled">sync</span>
-              Data as of {data.dataFreshnessMinutesAgo} minute
-              {data.dataFreshnessMinutesAgo === 1 ? "" : "s"} ago
-            </p>
+      {/* Shared Dashboard Sidebar */}
+      <DashboardSidebar />
+
+      {/* Main Content */}
+      <main className="min-h-screen md:ml-64">
+
+        <div className="p-6 md:p-10 lg:p-12">
+
+          {/* Header */}
+          <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+
+            <div>
+              <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-primary">
+                District Operations
+              </p>
+
+              <h1 className="text-4xl font-bold tracking-tight text-on-surface md:text-5xl">
+                Continuity Overview
+              </h1>
+
+              <p className="mt-3 text-lg text-on-surface-variant">
+                District-wide referral performance and care continuity.
+              </p>
+            </div>
+
+            {data && (
+              <div className="flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm text-on-surface-variant">
+
+                <span className="material-symbols-outlined text-[18px] text-primary">
+                  sync
+                </span>
+
+                Data as of {data.dataFreshnessMinutesAgo} minute
+                {data.dataFreshnessMinutesAgo === 1 ? "" : "s"} ago
+
+              </div>
+            )}
+
+          </header>
+
+          {/* Error */}
+          {error && (
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {error}
+            </div>
           )}
-        </header>
 
-        {error && (
-          <p role="alert" className="text-error font-body-md text-body-md mb-lg">
-            Failed to load dashboard: {error}
-          </p>
-        )}
+          {/* Loading */}
+          {!data && !error && (
+            <div className="rounded-3xl border border-outline-variant bg-surface-container-low p-10 text-center">
 
-        {!data && !error && (
-          <p className="font-body-md text-body-md text-on-surface-variant">Loading dashboard…</p>
-        )}
+              <span className="material-symbols-outlined mb-3 text-4xl text-primary">
+                progress_activity
+              </span>
 
-        {data && (
-          <div className="space-y-xl">
-            <ContinuityOverview
-              totalReferrals={data.totalReferrals}
-              accepted={data.accepted}
-              completed={data.completed}
-              followUpCompleted={data.followUpCompleted}
-              overdue={data.overdue}
-              noShow={data.noShow}
-              totalEligibleForCompletion={data.totalEligibleForCompletion}
-              followUpsDue={data.followUpsDue}
-            />
-            <FacilityContinuityTable facilities={data.facilities} />
-          </div>
-        )}
+              <p className="font-semibold text-on-surface">
+                Loading dashboard...
+              </p>
+
+              <p className="mt-1 text-sm text-on-surface-variant">
+                Preparing district continuity metrics.
+              </p>
+
+            </div>
+          )}
+
+          {/* Dashboard Content */}
+          {data && (
+            <div className="space-y-8">
+
+              <ContinuityOverview
+                totalReferrals={data.totalReferrals}
+                accepted={data.accepted}
+                completed={data.completed}
+                followUpCompleted={data.followUpCompleted}
+                overdue={data.overdue}
+                noShow={data.noShow}
+                totalEligibleForCompletion={
+                  data.totalEligibleForCompletion
+                }
+                followUpsDue={data.followUpsDue}
+              />
+
+              <FacilityContinuityTable
+                facilities={data.facilities}
+              />
+
+            </div>
+          )}
+
+        </div>
+
       </main>
+
     </div>
   );
 }
