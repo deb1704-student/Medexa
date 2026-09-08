@@ -11,7 +11,6 @@ import { MOCK_PATIENT_CASES, type PatientCase } from "@/sync/mockPatientCases";
 import { PatientCard } from "@/components/common/PatientCard";
 import { SearchSortFilter, type FilterState } from "@/components/common/SearchSortFilter";
 import { PatientRecordDrawer } from "@/components/common/PatientRecordDrawer";
-import { TeleconsultationModal } from "@/components/common/TeleconsultationModal";
 import { EmergencyEscalationModal } from "@/components/common/EmergencyEscalationModal";
 import { ReferralStatusStepper } from "@/components/common/ReferralStatusStepper";
 import { useLanguageStore } from "@/i18n/useLanguageStore";
@@ -42,8 +41,23 @@ export function AshaReferralPage() {
   const isAsha = isAshaAuthenticated();
   const list = Array.isArray(scopedReferrals) ? scopedReferrals : [];
 
-  // Top level views: "episode" (Care Episode First) | "queue" (Village Referrals Queue)
-  const [activeTab, setActiveTab] = useState<"episode" | "queue">("episode");
+  // Reordered workflow: 1. Digital Triage (entry point) | 2. Village Referral
+  const viewParam = searchParams.get("view");
+  const [activeTab, setActiveTab] = useState<"triage" | "referral">(
+    viewParam === "referral" ? "referral" : "triage"
+  );
+
+  // Inside Village Referral: "create" (Dispatch Referral) | "queue" (Follow-ups & History)
+  const [referralSubView, setReferralSubView] = useState<"create" | "queue">("create");
+
+  useEffect(() => {
+    const view = searchParams.get("view");
+    if (view === "referral") {
+      setActiveTab("referral");
+    } else if (view === "triage") {
+      setActiveTab("triage");
+    }
+  }, [searchParams]);
 
   // Single Dedicated ASHA Auth Modal
   const [ashaAuthOpen, setAshaAuthOpen] = useState(false);
@@ -64,9 +78,6 @@ export function AshaReferralPage() {
 
   const [selectedCaseForDrawer, setSelectedCaseForDrawer] = useState<PatientCase | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const [selectedCaseForTeleconsult, setSelectedCaseForTeleconsult] = useState<PatientCase | null>(null);
-  const [teleconsultOpen, setTeleconsultOpen] = useState(false);
 
   const [selectedCaseForEmergency, setSelectedCaseForEmergency] = useState<PatientCase | null>(null);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
@@ -121,7 +132,8 @@ export function AshaReferralPage() {
   useEffect(() => {
     if (searchParams.get("create") === "true") {
       if (isAsha) {
-        setActiveTab("episode");
+        setActiveTab("referral");
+        setReferralSubView("create");
         setStepperStage("assessment");
       } else {
         setAshaAuthOpen(true);
@@ -323,7 +335,8 @@ export function AshaReferralPage() {
       setActiveEpisodeReferral(null);
       setStepperStage("assessment");
     }
-    setActiveTab("episode");
+    setActiveTab("referral");
+    setReferralSubView("create");
   };
 
   const handleOpenSituation = (patient: UnifiedReferral) => {
@@ -358,12 +371,12 @@ export function AshaReferralPage() {
                   type="button"
                   onClick={() => {
                     setIsSwitchingPatient(true);
-                    setActiveTab("episode");
+                    setActiveTab("triage");
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-teal-800 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-teal-900 active:scale-[0.98]"
                 >
                   <span className="material-symbols-outlined text-base">person_add</span>
-                  <span>{tPortal("careEpisode", "Intake New Patient", language)}</span>
+                  <span>{tPortal("registerPatientFirst", "Register Patient Intake", language)}</span>
                 </button>
               ) : null
             }
@@ -459,45 +472,97 @@ export function AshaReferralPage() {
                 </span>
               </div>
 
-              {/* Navigation Mode Switcher: Active Care Episode vs Village Queue */}
-              <div className="flex border-b border-outline-variant">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("episode")}
-                  className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition ${
-                    activeTab === "episode"
-                      ? "border-primary text-primary bg-primary/5"
-                      : "border-transparent text-on-surface-variant hover:text-on-surface"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">medical_information</span>
-                  <span>{tPortal("careEpisode", "Active Care Episode")}</span>
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
-                    Primary Flow
-                  </span>
-                </button>
+              {/* ASHA Portal Sidebar Workflow Order: 1. Digital Triage (Entry) -> 2. Village Referral */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant">
+                <div className="flex">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("triage")}
+                    className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition ${
+                      activeTab === "triage"
+                        ? "border-primary text-primary bg-primary/5"
+                        : "border-transparent text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-lg">vital_signs</span>
+                    <span>1. {tPortal("digitalTriage", "Digital Triage")}</span>
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
+                      Entry Point
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("queue")}
-                  className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition ${
-                    activeTab === "queue"
-                      ? "border-primary text-primary bg-primary/5"
-                      : "border-transparent text-on-surface-variant hover:text-on-surface"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">format_list_bulleted</span>
-                  <span>{tPortal("villageCases", "My Village Cases & Follow-ups")}</span>
-                  <span className="rounded-full bg-surface-container px-2 py-0.5 text-[10px] font-bold text-on-surface-variant">
-                    {totalReferrals}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("referral")}
+                    className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition ${
+                      activeTab === "referral"
+                        ? "border-primary text-primary bg-primary/5"
+                        : "border-transparent text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-lg">volunteer_activism</span>
+                    <span>2. {tPortal("villageReferrals", "Village Referral")}</span>
+                    <span className="rounded-full bg-surface-container px-2 py-0.5 text-[10px] font-bold text-on-surface-variant">
+                      {totalReferrals}
+                    </span>
+                  </button>
+                </div>
+
+                {activeTab === "referral" && (
+                  <div className="flex items-center gap-1.5 p-1 bg-surface-container rounded-xl text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setReferralSubView("create")}
+                      className={`px-3 py-1 rounded-lg font-bold transition ${
+                        referralSubView === "create"
+                          ? "bg-white text-primary shadow-xs"
+                          : "text-on-surface-variant hover:text-on-surface"
+                      }`}
+                    >
+                      Referral Creation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReferralSubView("queue")}
+                      className={`px-3 py-1 rounded-lg font-bold transition ${
+                        referralSubView === "queue"
+                          ? "bg-white text-primary shadow-xs"
+                          : "text-on-surface-variant hover:text-on-surface"
+                      }`}
+                    >
+                      Case Follow-ups ({totalReferrals})
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* =========================================================
-                  TAB 1: CARE EPISODE WORKFLOW (§5.2 & §5.3)
+                  ITEM 1: DIGITAL TRIAGE (ENTRY POINT)
                   ========================================================= */}
-              {activeTab === "episode" && (
+              {activeTab === "triage" && (
+                <div className="space-y-6">
+                  {/* Digital Triage Patient Intake */}
+                  <DigitalTriagePage
+                    embedded
+                    careEpisodeId={`EP-${activePatient.id}`}
+                    workerId={ashaUser?.id || "ASHA-WB-401"}
+                    patientData={{
+                      id: activePatient.id,
+                      name: activePatient.name,
+                      ageGender: activePatient.ageGender,
+                    }}
+                    onComplete={(riskLevel, assessment) => {
+                      handleTriageCompleted(riskLevel, assessment);
+                    }}
+                    onBackToReferral={() => setActiveTab("referral")}
+                  />
+                </div>
+              )}
+
+              {/* =========================================================
+                  ITEM 2: VILLAGE REFERRAL (AFTER PATIENT ENTERED VIA TRIAGE)
+                  ========================================================= */}
+              {activeTab === "referral" && referralSubView === "create" && (
                 <div className="space-y-6">
                   {/* PATIENT DETAILS CARD */}
                   <div className="rounded-3xl border border-outline-variant bg-surface p-5 sm:p-7 shadow-sm">
@@ -1015,16 +1080,16 @@ export function AshaReferralPage() {
               )}
 
               {/* =========================================================
-                  TAB 2: MY VILLAGE CASES & FOLLOW-UPS QUEUE
+                  VILLAGE CASES & FOLLOW-UPS QUEUE (PATIENT DETAILS ONLY)
                   ========================================================= */}
-              {activeTab === "queue" && (
+              {activeTab === "referral" && referralSubView === "queue" && (
                 <div className="space-y-6">
                   {/* Statistics Cards */}
                   <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm">
                       <p className="text-sm font-medium text-on-surface-variant">Total Village Cases</p>
                       <h3 className="mt-2 text-3xl font-bold">{totalReferrals}</h3>
-                      <p className="mt-3 text-xs text-on-surface-variant">Referred to Block Office</p>
+                      <p className="mt-3 text-xs text-on-surface-variant">Referred to CHC/PHC</p>
                     </div>
 
                     <div className="rounded-2xl border border-red-200 bg-red-50/40 p-5 shadow-sm">
@@ -1034,13 +1099,13 @@ export function AshaReferralPage() {
                     </div>
 
                     <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm">
-                      <p className="text-sm font-medium text-on-surface-variant">At Block Office</p>
+                      <p className="text-sm font-medium text-on-surface-variant">At CHC/PHC</p>
                       <h3 className="mt-2 text-3xl font-bold text-indigo-700">{atBlockOfficeCount}</h3>
-                      <p className="mt-3 text-xs text-on-surface-variant">In Block PHC/CHC care</p>
+                      <p className="mt-3 text-xs text-on-surface-variant">In CHC/PHC care</p>
                     </div>
 
                     <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm">
-                      <p className="text-sm font-medium text-on-surface-variant">Escalated to District</p>
+                      <p className="text-sm font-medium text-on-surface-variant">Escalated to Regional</p>
                       <h3 className="mt-2 text-3xl font-bold text-purple-700">{escalatedCount}</h3>
                       <p className="mt-3 text-xs text-on-surface-variant">Tertiary specialist care</p>
                     </div>
@@ -1060,7 +1125,7 @@ export function AshaReferralPage() {
                     filteredCount={filteredCases.length}
                   />
 
-                  {/* View Mode: Cards Grid vs Table List */}
+                  {/* View Mode: Cards Grid vs Table List (Showing patient details only, no teleconsult UI) */}
                   {filterState.viewMode === "cards" ? (
                     filteredCases.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
@@ -1072,10 +1137,6 @@ export function AshaReferralPage() {
                             onOpenTimeline={(p) => {
                               setSelectedCaseForDrawer(p);
                               setDrawerOpen(true);
-                            }}
-                            onOpenTeleconsult={(p) => {
-                              setSelectedCaseForTeleconsult(p);
-                              setTeleconsultOpen(true);
                             }}
                             onEmergencyEscalate={(p) => {
                               setSelectedCaseForEmergency(p);
@@ -1112,10 +1173,10 @@ export function AshaReferralPage() {
                       </div>
                     )
                   ) : (
-                    /* Table View with ReferralStatusStepper */
+                    /* Table View showing only patient details and frontline actions */
                     <section className="overflow-hidden rounded-3xl border border-outline-variant bg-surface shadow-sm">
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1100px] text-left">
+                        <table className="w-full min-w-[1000px] text-left">
                           <thead className="border-b border-outline-variant bg-surface-container-low">
                             <tr>
                               <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
@@ -1203,17 +1264,6 @@ export function AshaReferralPage() {
                                       title="Health Record"
                                     >
                                       Record
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedCaseForTeleconsult(patient);
-                                        setTeleconsultOpen(true);
-                                      }}
-                                      className="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-100"
-                                      title="Teleconsult"
-                                    >
-                                      Tele
                                     </button>
                                     {patient.riskLevel === "RED" && (
                                       <button
@@ -1492,26 +1542,15 @@ export function AshaReferralPage() {
         </div>
       )}
 
-      {/* Task 2: Longitudinal Patient Record Drawer */}
+      {/* Longitudinal Patient Record Drawer */}
       <PatientRecordDrawer
         patient={selectedCaseForDrawer}
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        onStartTeleconsult={(p) => {
-          setSelectedCaseForTeleconsult(p);
-          setTeleconsultOpen(true);
-        }}
         onStartEpisode={handleSelectPatientCase}
       />
 
-      {/* Task 3: Assisted Teleconsultation Modal */}
-      <TeleconsultationModal
-        patient={selectedCaseForTeleconsult}
-        isOpen={teleconsultOpen}
-        onClose={() => setTeleconsultOpen(false)}
-      />
-
-      {/* Task 5: Emergency 108 Ambulance Escalation Modal */}
+      {/* Emergency 108 Ambulance Escalation Modal */}
       <EmergencyEscalationModal
         patient={selectedCaseForEmergency}
         isOpen={emergencyOpen}

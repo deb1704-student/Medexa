@@ -17,13 +17,39 @@
 }
 
 body {
-  font-family: "Atkinson Hyperlegible Next", "Noto Sans", "Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Gujarati", "Noto Sans Kannada", "Noto Sans Malayalam", "Noto Sans Oriya", "Noto Sans Gurmukhi", system-ui, -apple-system, sans-serif;
+  font-family: "Atkinson Hyperlegible Next", "Noto Sans", "Noto Sans Bengali", "Noto Sans Devanagari", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Gujarati", "Noto Sans Kannada", "Noto Sans Malayalam", "Noto Sans Oriya", "Noto Sans Gurmukhi", system-ui, -apple-system, sans-serif;
   background-color: theme("colors.background");
   color: theme("colors.on-background");
   min-height: max(884px, 100dvh);
 }
 h1, h2, h3, h4, h5, h6, .display-font {
-  font-family: "Plus Jakarta Sans", "Noto Sans", "Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Gujarati", "Noto Sans Kannada", "Noto Sans Malayalam", "Noto Sans Oriya", "Noto Sans Gurmukhi", system-ui, -apple-system, sans-serif;
+  font-family: "Plus Jakarta Sans", "Noto Sans Bengali", "Noto Sans Devanagari", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Gujarati", "Noto Sans Kannada", "Noto Sans Malayalam", "Noto Sans Oriya", "Noto Sans Gurmukhi", system-ui, -apple-system, sans-serif;
+}
+
+/* Indic Script Typography & Line-Height Adjustments for Matra/Conjunct Legibility */
+:lang(bn),
+:lang(hi),
+:lang(ta),
+:lang(te),
+:lang(mr),
+:lang(gu),
+:lang(kn),
+:lang(ml),
+:lang(or),
+:lang(pa),
+:lang(as) {
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+}
+
+:lang(bn) h1, :lang(bn) h2, :lang(bn) h3, :lang(bn) h4, :lang(bn) h5, :lang(bn) h6,
+:lang(hi) h1, :lang(hi) h2, :lang(hi) h3, :lang(hi) h4, :lang(hi) h5, :lang(hi) h6 {
+  line-height: 1.38;
+}
+
+:lang(bn) button, :lang(bn) span, :lang(bn) p,
+:lang(hi) button, :lang(hi) span, :lang(hi) p {
+  text-rendering: optimizeLegibility;
 }
 
 /* Referral Tracker timeline connector — the vertical line linking

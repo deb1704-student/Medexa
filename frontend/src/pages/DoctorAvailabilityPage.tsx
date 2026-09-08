@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { DashboardSidebar } from "@/components/common/DashboardSidebar";
 import { useAuth } from "@/auth/auth";
 import { useLanguageStore } from "@/i18n/useLanguageStore";
@@ -16,15 +16,21 @@ export interface DoctorOnDuty {
   facility: string;
 }
 
-function getScopedDoctors(facility: string, role?: string): DoctorOnDuty[] {
-  if (role === "DISTRICT") {
+function getScopedDoctors(facility: string, role?: string, selectedDateStr?: string): DoctorOnDuty[] {
+  const isDistrict = role === "DISTRICT";
+
+  // Simulate realistic shift variation based on selected day of week
+  const dateObj = selectedDateStr ? new Date(selectedDateStr) : new Date();
+  const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
+
+  if (isDistrict) {
     return [
       {
         id: "DOC-D-01",
         name: "Dr. A. Sen",
         specialty: "Cardiology & Intensive Care",
         department: "Tertiary Cardiology",
-        status: "Available",
+        status: dayOfWeek === 0 ? "Off Duty" : "Available",
         shift: "09:00 AM – 03:00 PM",
         room: "CCU Specialist Chamber 101",
         facility: facility,
@@ -34,7 +40,7 @@ function getScopedDoctors(facility: string, role?: string): DoctorOnDuty[] {
         name: "Dr. S. Chatterjee",
         specialty: "General & Laparoscopic Surgery",
         department: "Surgical Services",
-        status: "In Consultation",
+        status: dayOfWeek === 1 || dayOfWeek === 4 ? "Available" : "In Consultation",
         shift: "08:30 AM – 02:30 PM",
         room: "OT Complex & OPD 104",
         facility: facility,
@@ -64,8 +70,8 @@ function getScopedDoctors(facility: string, role?: string): DoctorOnDuty[] {
         name: "Dr. Pradeep Karmakar",
         specialty: "Orthopedics & Trauma Surgery",
         department: "Orthopedic Surgery",
-        status: "On Leave",
-        shift: "Approved Leave",
+        status: dayOfWeek === 6 ? "Available" : "On Leave",
+        shift: dayOfWeek === 6 ? "09:00 AM – 01:00 PM" : "Approved Leave",
         room: "Trauma OPD 108",
         facility: facility,
       },
@@ -82,16 +88,16 @@ function getScopedDoctors(facility: string, role?: string): DoctorOnDuty[] {
     ];
   }
 
-  // Block PHC / CHC
+  // CHC / PHC Doctors
   return [
     {
       id: "DOC-B-01",
       name: "Dr. Anirban Roy",
       specialty: "General Medicine & Health Admin",
-      department: "Block Outpatient Department",
-      status: "Available",
+      department: "CHC Outpatient Department",
+      status: dayOfWeek === 0 ? "Off Duty" : "Available",
       shift: "09:00 AM – 02:00 PM",
-      room: "BMOH Chamber 1",
+      room: "MOIC Chamber 1",
       facility: facility,
     },
     {
@@ -99,7 +105,7 @@ function getScopedDoctors(facility: string, role?: string): DoctorOnDuty[] {
       name: "Dr. Meera Banik",
       specialty: "Obstetrics & Gynecology",
       department: "Maternal & Child Health",
-      status: "In Consultation",
+      status: dayOfWeek === 3 ? "Available" : "In Consultation",
       shift: "09:00 AM – 02:00 PM",
       room: "Maternity OPD Room 3",
       facility: facility,
@@ -155,16 +161,34 @@ export function DoctorAvailabilityPage() {
   const { tPortal, language } = useLanguageStore();
   const [filter, setFilter] = useState<string>("ALL");
 
+  // Prominent Live Clock state
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Date picker / calendar selection state (defaults to today YYYY-MM-DD)
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return d.toISOString().split("T")[0];
+  }, []);
+
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const activeFacility = useMemo(() => {
     if (user?.facilityOrVillage) return user.facilityOrVillage;
     if (user?.facility) return user.facility;
-    if (user?.role === "DISTRICT") return "Bankura District General Hospital";
-    return "Belur Block Primary Health Centre";
+    if (user?.role === "DISTRICT") return "Bankura Regional Hospital";
+    return "Belur Community Health Centre (CHC)";
   }, [user]);
 
   const doctors = useMemo(() => {
-    return getScopedDoctors(activeFacility, user?.role);
-  }, [activeFacility, user?.role]);
+    return getScopedDoctors(activeFacility, user?.role, selectedDate);
+  }, [activeFacility, user?.role, selectedDate]);
 
   const availableCount = doctors.filter((d) => d.status === "Available").length;
   const inConsultCount = doctors.filter((d) => d.status === "In Consultation").length;
@@ -174,6 +198,23 @@ export function DoctorAvailabilityPage() {
     if (filter === "ALL") return doctors;
     return doctors.filter((d) => d.status === filter);
   }, [doctors, filter]);
+
+  const isTodaySelected = selectedDate === todayStr;
+
+  const formattedSelectedDate = useMemo(() => {
+    try {
+      const parts = selectedDate.split("-");
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      return d.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return selectedDate;
+    }
+  }, [selectedDate]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -185,13 +226,13 @@ export function DoctorAvailabilityPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-primary">
-                {user?.role === "DISTRICT" ? "Tertiary Command & Specialist Duty" : "Block Medical Officer Duty Roster"}
+                {user?.role === "DISTRICT" ? "Regional Hospital Duty Command" : "Community Health Centre (CHC) Duty Roster"}
               </p>
               <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold text-on-surface">
                 {tPortal("doctorAvailabilityTitle", "Doctor Availability", language)}
               </h1>
               <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-on-surface-variant leading-relaxed">
-                {tPortal("doctorAvailabilitySubtitle", "Real-time duty status and department coverage", language)}
+                {tPortal("doctorAvailabilitySubtitle", "Real-time duty status, scheduled shifts, and clinical department coverage", language)}
               </p>
             </div>
 
@@ -208,27 +249,118 @@ export function DoctorAvailabilityPage() {
         </header>
 
         <div className="p-6 md:p-10 space-y-8">
+          {/* PROMINENT LIVE CLOCK & CALENDAR VIEW / PICKER BAR */}
+          <section className="rounded-3xl border border-indigo-200 bg-gradient-to-r from-indigo-50/80 via-surface to-primary/5 p-6 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              {/* Prominent Live Time Display */}
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-indigo-700 text-white shadow-md">
+                  <span className="material-symbols-outlined text-3xl animate-pulse">schedule</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-indigo-900">
+                      Live Hospital Time (IST)
+                    </span>
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                  </div>
+                  <div className="mt-1 text-2xl sm:text-3xl font-black text-on-surface tracking-tight font-mono">
+                    {currentTime.toLocaleTimeString("en-US", { hour12: true })}
+                  </div>
+                  <p className="text-xs font-semibold text-on-surface-variant mt-0.5">
+                    {currentTime.toLocaleDateString("en-US", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Calendar Date Picker & Quick Presets */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="rounded-2xl border border-outline-variant bg-surface p-2 shadow-2xs flex items-center gap-2">
+                  <span className="material-symbols-outlined text-indigo-700 text-xl ml-2">calendar_month</span>
+                  <div className="pr-2">
+                    <label htmlFor="roster-date-picker" className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                      {tPortal("checkDateAvailability", "Check Date Availability")}
+                    </label>
+                    <input
+                      id="roster-date-picker"
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-on-surface outline-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(todayStr)}
+                    className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
+                      isTodaySelected
+                        ? "bg-indigo-700 text-white shadow-xs"
+                        : "bg-surface-container border border-outline-variant text-on-surface hover:bg-surface-container-high"
+                    }`}
+                  >
+                    {tPortal("today", "Today")}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tomorrow = new Date();
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+                      setSelectedDate(tomorrow.toISOString().split("T")[0]);
+                    }}
+                    className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
+                      selectedDate === new Date(Date.now() + 86400000).toISOString().split("T")[0]
+                        ? "bg-indigo-700 text-white shadow-xs"
+                        : "bg-surface-container border border-outline-variant text-on-surface hover:bg-surface-container-high"
+                    }`}
+                  >
+                    {tPortal("tomorrow", "Tomorrow")}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Date Indicator Banner */}
+            <div className="mt-4 pt-4 border-t border-indigo-200/60 flex items-center justify-between text-xs">
+              <span className="text-on-surface-variant flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm text-indigo-700">event</span>
+                <span>{tPortal("activeScheduleDate", "Active Schedule Date")}: <strong className="text-on-surface">{formattedSelectedDate}</strong></span>
+              </span>
+              <span className={`font-bold px-2.5 py-0.5 rounded-full ${isTodaySelected ? "bg-emerald-100 text-emerald-800" : "bg-indigo-100 text-indigo-800"}`}>
+                {isTodaySelected ? `● ${tPortal("liveRealTimeView", "Live Real-Time View")}` : `📅 ${tPortal("scheduledShiftPlan", "Scheduled Shift Plan")}`}
+              </span>
+            </div>
+          </section>
+
           {/* KPI CARDS (PRESERVED 3-CARD PATTERN) */}
           <div className="grid gap-5 md:grid-cols-3">
             <div
               onClick={() => setFilter(filter === "Available" ? "ALL" : "Available")}
-              className={`cursor-pointer rounded-3xl border p-5 sm:p-6 transition shadow-2xs ${
+              className={`cursor-pointer rounded-3xl border p-5 sm:p-6 transition shadow-2xs min-h-[140px] flex flex-col justify-between ${
                 filter === "Available"
                   ? "border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-500"
                   : "border-outline-variant bg-surface hover:border-emerald-400"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                    {tPortal("availableNow", "Available Now")}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant break-words">
+                    {tPortal("availableNow", "Available On Date")}
                   </p>
                   <p className="mt-2 text-3xl font-extrabold text-emerald-700 tracking-tight">
                     {availableCount}
                   </p>
-                  <p className="mt-1 text-[11px] text-emerald-800 font-semibold">{tPortal("readyForPatients", "Ready for patient consultations")}</p>
+                  <p className="mt-1 text-[11px] text-emerald-800 font-semibold break-words">{tPortal("readyForPatients", "Ready for patient consultations")}</p>
                 </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
                   <span className="material-symbols-outlined text-2xl">check_circle</span>
                 </div>
               </div>
@@ -236,23 +368,23 @@ export function DoctorAvailabilityPage() {
 
             <div
               onClick={() => setFilter(filter === "In Consultation" ? "ALL" : "In Consultation")}
-              className={`cursor-pointer rounded-3xl border p-5 sm:p-6 transition shadow-2xs ${
+              className={`cursor-pointer rounded-3xl border p-5 sm:p-6 transition shadow-2xs min-h-[140px] flex flex-col justify-between ${
                 filter === "In Consultation"
                   ? "border-blue-500 bg-blue-50/70 ring-2 ring-blue-500"
                   : "border-outline-variant bg-surface hover:border-blue-400"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant break-words">
                     {tPortal("inConsultation", "In Consultation")}
                   </p>
                   <p className="mt-2 text-3xl font-extrabold text-blue-700 tracking-tight">
                     {inConsultCount}
                   </p>
-                  <p className="mt-1 text-[11px] text-blue-800 font-semibold">{tPortal("activeConsultations", "Actively examining patients")}</p>
+                  <p className="mt-1 text-[11px] text-blue-800 font-semibold break-words">{tPortal("activeConsultations", "Actively examining patients")}</p>
                 </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-800">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-800">
                   <span className="material-symbols-outlined text-2xl">stethoscope</span>
                 </div>
               </div>
@@ -260,24 +392,24 @@ export function DoctorAvailabilityPage() {
 
             <div
               onClick={() => setFilter(filter === "Off Duty" ? "ALL" : "Off Duty")}
-              className={`cursor-pointer rounded-3xl border p-5 sm:p-6 transition shadow-2xs ${
+              className={`cursor-pointer rounded-3xl border p-5 sm:p-6 transition shadow-2xs min-h-[140px] flex flex-col justify-between ${
                 filter === "Off Duty"
                   ? "border-slate-500 bg-slate-100 ring-2 ring-slate-500"
                   : "border-outline-variant bg-surface hover:border-slate-400"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant break-words">
                     {tPortal("offDuty", "Off Duty / On Leave")}
                   </p>
                   <p className="mt-2 text-3xl font-extrabold text-slate-700 tracking-tight">
                     {offDutyCount}
                   </p>
-                  <p className="mt-1 text-[11px] text-slate-600 font-semibold">{tPortal("shiftEnded", "Shift ended or on approved leave")}</p>
+                  <p className="mt-1 text-[11px] text-slate-600 font-semibold break-words">{tPortal("shiftEnded", "Shift ended or on approved leave")}</p>
                 </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-200 text-slate-700">
-                  <span className="material-symbols-outlined text-2xl">schedule</span>
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                  <span className="material-symbols-outlined text-2xl">bedtime</span>
                 </div>
               </div>
             </div>
@@ -291,7 +423,7 @@ export function DoctorAvailabilityPage() {
                   {tPortal("doctorRoster", "Clinical Duty Roster")}
                 </h2>
                 <p className="text-xs text-on-surface-variant mt-0.5">
-                  Verified roster for <strong className="text-on-surface">{activeFacility}</strong>
+                  Verified roster for <strong className="text-on-surface">{activeFacility}</strong> on <span className="font-semibold text-primary">{formattedSelectedDate}</span>
                 </p>
               </div>
 

@@ -103,59 +103,66 @@ export function HomePage() {
             </section>
 
             {/* =========================================================
-                RIGHT COLUMN: LIVE TIER GLANCE HERO CARD
+                RIGHT COLUMN: FRONTLINE HEALTHCARE HERO PHOTO SHOWCASE
                 ========================================================= */}
-            <section className="relative w-full max-w-xl mx-auto lg:max-w-none">
-              <div className="absolute -inset-4 sm:-inset-5 rounded-[2.5rem] bg-primary/10 blur-3xl pointer-events-none" />
+            <section className="relative w-full max-w-lg md:max-w-xl lg:max-w-none mx-auto flex items-center justify-center">
+              {/* Soft ambient backlight matching Medexa primary teal palette */}
+              <div className="absolute -inset-4 sm:-inset-6 rounded-[2.5rem] bg-primary/15 blur-2xl sm:blur-3xl pointer-events-none" />
 
-              <div className="relative rounded-3xl border border-white/70 bg-white/70 p-6 sm:p-8 shadow-xl backdrop-blur-md">
-                <div className="flex items-center justify-between pb-5 border-b border-slate-200/60">
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                      MULTI-LEVEL HEALTHCARE
+              {/* Glassmorphic Container Card */}
+              <div className="relative w-full overflow-hidden rounded-2xl sm:rounded-3xl border border-white/80 bg-white/80 p-2.5 sm:p-3.5 shadow-xl sm:shadow-2xl backdrop-blur-md transition duration-300">
+                
+                {/* 16:9 Image Frame Container with reserved aspect ratio for 0 CLS */}
+                <div className="relative w-full overflow-hidden rounded-xl sm:rounded-2xl aspect-video bg-slate-100 shadow-inner">
+                  <img
+                    src="/hero-frontline-health.jpg"
+                    alt="Frontline healthcare medical officer examining patient at Primary Health Centre in Purba Medinipur, West Bengal"
+                    width={1024}
+                    height={576}
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    className="h-full w-full object-cover object-center transition-transform duration-700 ease-out hover:scale-105"
+                  />
+
+                  {/* Subtle top gradient overlay to make live status badge pop */}
+                  <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+
+                  {/* Live Field Status Badge (Top-left on image) */}
+                  <div className="absolute top-3 left-3 sm:top-4 sm:left-4 inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/60 px-3 py-1 text-xs font-semibold text-white shadow-md backdrop-blur-md">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
                     </span>
-                    <h2 className="mt-0.5 text-xl font-bold text-[#111918]">
-                      Connected Healthcare, Even Offline
-                    </h2>
+                    <span className="tracking-wide">Primary Health Centre Ground Level</span>
                   </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white shadow-md">
-                    <span className="material-symbols-outlined text-2xl">health_and_safety</span>
+
+                  {/* Verification pill (Top-right on image) */}
+                  <div className="hidden xs:inline-flex absolute top-3 right-3 sm:top-4 sm:right-4 items-center gap-1.5 rounded-full border border-white/30 bg-emerald-950/70 px-2.5 py-1 text-[11px] font-medium text-emerald-200 shadow-md backdrop-blur-md">
+                    <span className="material-symbols-outlined text-[14px]">verified</span>
+                    <span>Verified Unit</span>
                   </div>
                 </div>
 
-                {/* 3 Quick Visual Tier Pillars */}
-                <div className="mt-6 space-y-3.5">
-                  <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/80 border border-slate-200/60 shadow-xs">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary font-bold">
-                      1
+                {/* Bottom Context Info Bar */}
+                <div className="mt-2.5 sm:mt-3 px-1 sm:px-2 pb-1 sm:pb-1.5 flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <span className="material-symbols-outlined text-[18px]">location_on</span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-primary uppercase">Village / Ward Tier</p>
-                      <p className="text-sm font-bold text-[#111918]">ASHA Frontline Care</p>
-                      <p className="text-xs text-[#4c5655]">Patient intake, digital triage, referral to block</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/80 border border-slate-200/60 shadow-xs">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-700 font-bold">
-                      2
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-indigo-700 uppercase">Block PHC / CHC Tier</p>
-                      <p className="text-sm font-bold text-[#111918]">Block Medical Office</p>
-                      <p className="text-xs text-[#4c5655]">Arrival triage, inpatient beds, 108 escalation</p>
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-bold text-[#111918] truncate">
+                        প্রাথমিক স্বাস্থ্য কেন্দ্র (PHC)
+                      </p>
+                      <p className="text-[11px] sm:text-xs text-[#52605e] truncate">
+                        Purba Medinipur, West Bengal
+                      </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/80 border border-slate-200/60 shadow-xs">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-600/15 text-teal-800 font-bold">
-                      3
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-teal-800 uppercase">District Hospital Tier</p>
-                      <p className="text-sm font-bold text-[#111918]">Tertiary CMOH Command</p>
-                      <p className="text-xs text-[#4c5655]">ICU admission, specialists, closed-loop back-referral</p>
-                    </div>
+                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                    <span className="material-symbols-outlined text-[14px] text-primary">hub</span>
+                    <span>ASHA • PHC • CHC Tier Link</span>
                   </div>
                 </div>
 

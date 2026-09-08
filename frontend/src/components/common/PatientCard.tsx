@@ -215,16 +215,18 @@ export const PatientCard: React.FC<PatientCardProps> = ({
           <span className="hidden sm:inline ml-1 text-xs">Record</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => onOpenTeleconsult?.(patient)}
-          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-100 transition active:scale-[0.98]"
-          title="Start Teleconsultation"
-          aria-label="Start Teleconsultation"
-        >
-          <span className="material-symbols-outlined text-[18px]">video_call</span>
-          <span className="hidden sm:inline ml-1 text-xs">Teleconsult</span>
-        </button>
+        {onOpenTeleconsult && (
+          <button
+            type="button"
+            onClick={() => onOpenTeleconsult(patient)}
+            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-100 transition active:scale-[0.98]"
+            title="Start Teleconsultation"
+            aria-label="Start Teleconsultation"
+          >
+            <span className="material-symbols-outlined text-[18px]">video_call</span>
+            <span className="hidden sm:inline ml-1 text-xs">Teleconsult</span>
+          </button>
+        )}
 
         {patient.riskLevel === "RED" && onEmergencyEscalate && (
           <button

@@ -37,9 +37,9 @@ export function DistrictDashboardPage() {
 
   const districtHospitalScorecard: FacilityScorecardData = {
     facilityId: "FAC-WB-DH-01",
-    facilityName: `${selectedDistrict} Sammilani Medical College & District Hospital`,
-    tier: "District Hospital",
-    block: "District Sadar",
+    facilityName: `${selectedDistrict} Medical College & Regional Hospital`,
+    tier: "Regional Hospital",
+    block: "Regional Sadar",
     district: selectedDistrict,
     totalBeds: 450,
     occupiedBeds: 394,
@@ -79,11 +79,11 @@ export function DistrictDashboardPage() {
   const noShow = 1;
 
   const facilities = useMemo(() => {
-    const blockScope = selectedBlock === "All Blocks" ? "District General" : selectedBlock;
+    const blockScope = selectedBlock === "All Blocks" ? "Regional General" : selectedBlock;
     return [
       {
         facilityId: "FAC-WB-01",
-        facilityName: `${selectedDistrict} District Hospital (${blockScope})`,
+        facilityName: `${selectedDistrict} Regional Hospital (${blockScope})`,
         totalReferrals: Math.round(totalReferrals * 0.5),
         completionRatePercent: 92,
         avgReferralDelayHours: 3.5,

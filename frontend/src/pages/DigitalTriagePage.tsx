@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { TriageForm } from "@/components/triage/TriageForm";
 import type { ClinicalRiskLevelT } from "@/models/careEpisode";
 import { LanguageSelector } from "@/components/common/LanguageSelector";
 import { useLanguageStore } from "@/i18n/useLanguageStore";
+import { useAuth } from "@/auth/auth";
+import { useReferralAuth } from "@/sync/referralAuth";
 
 export interface DigitalTriagePageProps {
   embedded?: boolean;
@@ -15,6 +17,7 @@ export interface DigitalTriagePageProps {
     ageGender?: string;
   };
   onComplete?: (riskLevel: ClinicalRiskLevelT, assessment?: any) => void;
+  onBackToReferral?: () => void;
 }
 
 export function DigitalTriagePage({
@@ -23,8 +26,20 @@ export function DigitalTriagePage({
   workerId: propWorkerId,
   patientData,
   onComplete,
+  onBackToReferral,
 }: DigitalTriagePageProps = {}) {
   const { tPortal, language } = useLanguageStore();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { ashaUser, logoutAsha } = useReferralAuth();
+  const currentAsha = ashaUser || (user?.role === "ASHA" ? user : null);
+
+  const handleLogout = () => {
+    if (logoutAsha) logoutAsha();
+    if (logout) logout();
+    navigate("/#portals");
+  };
+
   const params = useParams<{
     careEpisodeId: string;
   }>();
@@ -79,33 +94,47 @@ export function DigitalTriagePage({
   // If embedded directly inside Care Episode (§5.3)
   if (embedded) {
     return (
-      <div className="rounded-3xl border border-outline-variant bg-surface p-5 sm:p-7 shadow-sm">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant pb-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-              <span className="material-symbols-outlined text-2xl">stethoscope</span>
+      <div className="space-y-4">
+        <div className="rounded-3xl border border-outline-variant bg-surface p-5 sm:p-7 shadow-sm">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <span className="material-symbols-outlined text-2xl">stethoscope</span>
+              </div>
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                  1. Digital Triage Entry Point
+                </span>
+                <h3 className="text-lg font-bold text-on-surface">Digital Triage Assessment & Patient Registration</h3>
+              </div>
             </div>
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                Care Episode Stage 1
+            <div className="flex items-center gap-2.5">
+              <span className="rounded-full bg-surface-container px-3 py-1 text-xs font-medium text-on-surface-variant">
+                Assessment ID: <span className="font-mono">{episodeId.slice(0, 8)}...</span>
               </span>
-              <h3 className="text-lg font-bold text-on-surface">Digital Triage Assessment</h3>
+              {onBackToReferral && (
+                <button
+                  type="button"
+                  onClick={onBackToReferral}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-outline-variant bg-surface-container-low px-3 py-1 text-xs font-bold text-on-surface-variant hover:text-primary hover:bg-surface-container transition"
+                >
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                  <span>{tPortal("backToVillageReferral", "Village Referrals")}</span>
+                </button>
+              )}
             </div>
           </div>
-          <span className="rounded-full bg-surface-container px-3 py-1 text-xs font-medium text-on-surface-variant">
-            Assessment ID: <span className="font-mono">{episodeId.slice(0, 8)}...</span>
-          </span>
-        </div>
 
-        <TriageForm
-          careEpisodeId={episodeId}
-          workerId={workerId}
-          onSubmitted={(riskLevel, assessment) => {
-            if (onComplete) {
-              onComplete(riskLevel, assessment);
-            }
-          }}
-        />
+          <TriageForm
+            careEpisodeId={episodeId}
+            workerId={workerId}
+            onSubmitted={(riskLevel, assessment) => {
+              if (onComplete) {
+                onComplete(riskLevel, assessment);
+              }
+            }}
+          />
+        </div>
       </div>
     );
   }
@@ -142,19 +171,35 @@ export function DigitalTriagePage({
 
           </Link>
 
-
+          {/* ASHA Credentials and Controls in Standalone Header */}
           <div className="flex items-center gap-3">
-            <LanguageSelector />
-            <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-white">
-              <span className="material-symbols-outlined text-[19px]">
-                cloud_off
-              </span>
-              <span className="hidden text-sm font-medium sm:block">
-                Offline-ready
-              </span>
-            </div>
-          </div>
+            <Link
+              to="/dashboard/referrals/asha?view=referral"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-white/20 transition"
+            >
+              <span className="material-symbols-outlined text-sm">arrow_back</span>
+              <span className="hidden sm:inline">{tPortal("backToVillageReferral", "Back to Village Referral")}</span>
+            </Link>
 
+            {currentAsha && (
+              <div className="hidden md:flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-white">
+                <span className="font-bold">{currentAsha.name}</span>
+                <span className="text-[10px] text-teal-200">({currentAsha.id})</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-rose-600/80 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-600 transition"
+              title="Sign Out"
+            >
+              <span className="material-symbols-outlined text-xs">logout</span>
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+
+            <LanguageSelector />
+          </div>
         </div>
       </header>
 

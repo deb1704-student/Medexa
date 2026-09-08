@@ -107,7 +107,7 @@ export function App() {
         <Route
           path="/dashboard/medicines"
           element={
-            <ProtectedRoute allowedRoles={["DISTRICT"]}>
+            <ProtectedRoute allowedRoles={["BLOCK", "DISTRICT"]}>
               <MedicineAvailabilityPage />
             </ProtectedRoute>
           }
@@ -115,7 +115,7 @@ export function App() {
         <Route
           path="/dashboard/diagnostics"
           element={
-            <ProtectedRoute allowedRoles={["DISTRICT"]}>
+            <ProtectedRoute allowedRoles={["BLOCK", "DISTRICT"]}>
               <DiagnosticsPage />
             </ProtectedRoute>
           }
@@ -128,6 +128,10 @@ export function App() {
               <DoctorAvailabilityPage />
             </ProtectedRoute>
           }
+        />
+        <Route
+          path="/dashboard/doctors"
+          element={<Navigate to="/dashboard/doctor-availability" replace />}
         />
         <Route
           path="/dashboard/appointments"

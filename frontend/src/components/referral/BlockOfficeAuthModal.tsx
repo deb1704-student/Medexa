@@ -61,9 +61,9 @@ export function BlockOfficeAuthModal({
               <span className="material-symbols-outlined text-2xl">domain</span>
             </div>
             <div>
-              <h2 className="text-lg font-bold">Block Health Officer Authentication</h2>
+              <h2 className="text-lg font-bold">CHC Medical Officer Authentication</h2>
               <p className="text-xs text-on-surface-variant">
-                Primary Health Centre & Block Administration database verification
+                Community Health Centre & PHC Administration database verification
               </p>
             </div>
           </div>
@@ -78,7 +78,7 @@ export function BlockOfficeAuthModal({
 
         {blockOfficerUser && (
           <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 text-xs flex items-center justify-between">
-            <span className="text-on-surface-variant">Active Block Officer:</span>
+            <span className="text-on-surface-variant">Active CHC Officer:</span>
             <span className="font-bold text-indigo-900">{blockOfficerUser.name} ({blockOfficerUser.id})</span>
           </div>
         )}
@@ -93,7 +93,7 @@ export function BlockOfficeAuthModal({
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-              Block Health Officer ID or Name (BMOH / MOIC) *
+              CHC Medical Officer ID or Name (MOIC / BMOH) *
             </label>
             <input
               type="text"
@@ -135,7 +135,7 @@ export function BlockOfficeAuthModal({
         {/* Database Quick Authenticate Buttons */}
         <div className="mt-5 border-t border-outline-variant pt-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">
-            Registered Block Officers (Click to Authenticate):
+            Registered CHC Officers (Click to Authenticate):
           </p>
           <div className="space-y-1.5">
             <button
@@ -145,7 +145,7 @@ export function BlockOfficeAuthModal({
             >
               <div>
                 <span className="font-bold text-indigo-900">Dr. Anirban Roy</span>
-                <span className="text-on-surface-variant ml-1.5">(BHO-WB-204 • Belur Block PHC)</span>
+                <span className="text-on-surface-variant ml-1.5">(BHO-WB-204 • Belur PHC / CHC)</span>
               </div>
               <span className="font-mono text-[11px] text-indigo-800 font-bold">PIN: 4321</span>
             </button>

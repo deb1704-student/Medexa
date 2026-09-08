@@ -1,12 +1,11 @@
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { DashboardSidebar } from "@/components/common/DashboardSidebar";
-
-type ReportStatus = "Completed" | "Pending" | "In Progress" | "Overdue";
-
-type MonthlyData = {
-  month: string;
-  referrals: number;
-};
+import { useReferralStore, type UnifiedReferral } from "@/sync/referralStore";
+import { ReferralStatusStepper } from "@/components/common/ReferralStatusStepper";
+import { PatientRecordDrawer } from "@/components/common/PatientRecordDrawer";
+import { MOCK_PATIENT_CASES, type PatientCase } from "@/sync/mockPatientCases";
+import { useLanguageStore } from "@/i18n/useLanguageStore";
 
 type FacilityReport = {
   name: string;
@@ -15,26 +14,9 @@ type FacilityReport = {
   pending: number;
 };
 
-type RecentReferral = {
-  id: string;
-  patient: string;
-  facility: string;
-  status: ReportStatus;
-  date: string;
-};
-
-const monthlyData: MonthlyData[] = [
-  { month: "Apr", referrals: 42 },
-  { month: "May", referrals: 58 },
-  { month: "Jun", referrals: 71 },
-  { month: "Jul", referrals: 64 },
-  { month: "Aug", referrals: 83 },
-  { month: "Sep", referrals: 76 },
-];
-
 const facilityReports: FacilityReport[] = [
   {
-    name: "District Hospital",
+    name: "Bankura Regional Hospital",
     referrals: 56,
     completed: 42,
     pending: 8,
@@ -46,79 +28,24 @@ const facilityReports: FacilityReport[] = [
     pending: 7,
   },
   {
-    name: "CHC Kharagpur",
+    name: "CHC Joypur",
     referrals: 27,
     completed: 18,
     pending: 5,
   },
   {
-    name: "PHC Sonapur",
+    name: "Belur CHC / PHC",
     referrals: 24,
     completed: 17,
     pending: 4,
   },
   {
-    name: "PHC Rampur",
+    name: "Sonamukhi Rural Hospital (CHC)",
     referrals: 18,
     completed: 13,
     pending: 3,
   },
 ];
-
-const recentReferrals: RecentReferral[] = [
-  {
-    id: "REF-2026-001",
-    patient: "Anita Sharma",
-    facility: "District Hospital",
-    status: "Completed",
-    date: "03 Sep 2026",
-  },
-  {
-    id: "REF-2026-002",
-    patient: "Ramesh Kumar",
-    facility: "CHC Bishnupur",
-    status: "In Progress",
-    date: "03 Sep 2026",
-  },
-  {
-    id: "REF-2026-003",
-    patient: "Sunita Das",
-    facility: "District Hospital",
-    status: "Pending",
-    date: "02 Sep 2026",
-  },
-  {
-    id: "REF-2026-004",
-    patient: "Arjun Singh",
-    facility: "CHC Kharagpur",
-    status: "Completed",
-    date: "02 Sep 2026",
-  },
-  {
-    id: "REF-2026-005",
-    patient: "Priya Roy",
-    facility: "PHC Sonapur",
-    status: "Overdue",
-    date: "01 Sep 2026",
-  },
-];
-
-function StatusBadge({ status }: { status: ReportStatus }) {
-  const styles: Record<ReportStatus, string> = {
-    Completed: "bg-emerald-100 text-emerald-700",
-    Pending: "bg-amber-100 text-amber-700",
-    "In Progress": "bg-blue-100 text-blue-700",
-    Overdue: "bg-red-100 text-red-700",
-  };
-
-  return (
-    <span
-      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${styles[status]}`}
-    >
-      {status}
-    </span>
-  );
-}
 
 function StatCard({
   title,
@@ -147,6 +74,102 @@ function StatCard({
 }
 
 export function ReportsPage() {
+  const { referrals } = useReferralStore();
+  const { tPortal, language } = useLanguageStore();
+
+  const [search, setSearch] = useState("");
+  const [triageFilter, setTriageFilter] = useState("All");
+  const [recordDrawerOpen, setRecordDrawerOpen] = useState(false);
+  const [selectedPatientForRecord, setSelectedPatientForRecord] = useState<PatientCase | null>(null);
+
+  // Filter for CHC/PHC escalated referrals to Regional Hospital with full patient-level details
+  const escalatedReferrals = useMemo(() => {
+    const list = Array.isArray(referrals) ? referrals : [];
+    return list.filter(
+      (r) =>
+        r &&
+        (r.targetLevel === "DISTRICT_OFFICE" ||
+          r.status === "Escalated to District" ||
+          r.status === "In Consultation" ||
+          r.status === "Back-Referred" ||
+          r.toFacility.toLowerCase().includes("district") ||
+          r.toFacility.toLowerCase().includes("regional"))
+    );
+  }, [referrals]);
+
+  const filteredEscalated = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return escalatedReferrals.filter((item) => {
+      if (!item) return false;
+      const matchesSearch =
+        !q ||
+        item.patientName.toLowerCase().includes(q) ||
+        item.patientId.toLowerCase().includes(q) ||
+        item.id.toLowerCase().includes(q) ||
+        item.fromFacilityOrWorker.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q) ||
+        item.village.toLowerCase().includes(q);
+
+      const matchesTriage = triageFilter === "All" || item.triageLevel === triageFilter;
+      return matchesSearch && matchesTriage;
+    });
+  }, [escalatedReferrals, search, triageFilter]);
+
+  const handleOpenRecordForReferral = (item: UnifiedReferral) => {
+    const match = MOCK_PATIENT_CASES.find(
+      (p) =>
+        p.id === item.patientId ||
+        p.referralId === item.id ||
+        p.name.toLowerCase() === item.patientName.toLowerCase()
+    );
+    if (match) {
+      setSelectedPatientForRecord(match);
+    } else {
+      const adHoc: PatientCase = {
+        id: item.patientId,
+        referralId: item.id,
+        name: item.patientName,
+        age: parseInt(item.ageGender) || 28,
+        gender: item.ageGender.includes("M") ? "Male" : "Female",
+        village: item.village,
+        block: item.block,
+        district: item.district,
+        state: item.state,
+        phone: "+91 98321 00000",
+        abhaId: "91-8842-1092-9901",
+        condition: item.category,
+        conditionCategory: "Hypertension",
+        riskLevel: item.triageLevel,
+        careStage: "Consultation",
+        vitals: {
+          bp: "128/82 mmHg",
+          pulse: "80 bpm",
+          spo2: "98%",
+          temp: "98.4°F",
+          weight: "58 kg",
+        },
+        lastUpdated: item.referralDate,
+        assignedAsha: item.fromFacilityOrWorker,
+        referralFacility: item.toFacility,
+        doctorName: item.assignedDoctor,
+        notes: item.clinicalNotes,
+        timeline: [
+          {
+            id: `EV-${item.id}-1`,
+            date: item.referralDate,
+            stage: "Tertiary Evaluation",
+            title: `Admitted at ${item.toFacility}`,
+            description: item.clinicalNotes,
+            facility: item.toFacility,
+            doctor: item.assignedDoctor,
+          },
+        ],
+      };
+      setSelectedPatientForRecord(adHoc);
+    }
+    setRecordDrawerOpen(true);
+  };
+
   const totalReferrals = 338;
   const completedReferrals = 244;
   const pendingReferrals = 48;
@@ -154,10 +177,6 @@ export function ReportsPage() {
 
   const completionRate = Math.round(
     (completedReferrals / totalReferrals) * 100,
-  );
-
-  const maxMonthlyReferrals = Math.max(
-    ...monthlyData.map((item) => item.referrals),
   );
 
   return (
@@ -173,24 +192,21 @@ export function ReportsPage() {
               <div>
                 <div className="mb-2 flex items-center gap-2 text-sm text-on-surface-variant">
                   <Link
-                    to="/dashboard"
-                    className="hover:text-primary"
+                    to="/dashboard/referrals/district-office"
+                    className="hover:text-primary font-semibold"
                   >
-                    Dashboard
+                    {tPortal("regionalHospitalReferrals", "Regional Hospital Referrals")}
                   </Link>
-
                   <span>/</span>
-
-                  <span>Reports</span>
+                  <span>{tPortal("reports", "Reports & Patient Dossiers")}</span>
                 </div>
 
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Reports & Analytics
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                  {tPortal("reports", "Reports & Analytics", language)}
                 </h1>
 
                 <p className="mt-1 text-sm text-on-surface-variant">
-                  Monitor referral performance and healthcare continuity
-                  across the district.
+                  {tPortal("reportsSubtitle", "Comprehensive patient-level dossiers for CHC/PHC escalated cases, longitudinal records, and health system continuity metrics.")}
                 </p>
               </div>
 
@@ -199,29 +215,199 @@ export function ReportsPage() {
                   defaultValue="Last 6 Months"
                   className="rounded-xl border border-outline-variant bg-surface px-4 py-2.5 text-sm outline-none focus:border-primary"
                 >
-                  <option>Last 30 Days</option>
-                  <option>Last 3 Months</option>
-                  <option>Last 6 Months</option>
-                  <option>This Year</option>
+                  <option>{tPortal("last30Days", "Last 30 Days")}</option>
+                  <option>{tPortal("last3Months", "Last 3 Months")}</option>
+                  <option>{tPortal("last6Months", "Last 6 Months")}</option>
+                  <option>{tPortal("thisYear", "This Year")}</option>
                 </select>
 
                 <button
                   type="button"
-                  className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary hover:opacity-90"
+                  onClick={() => window.print()}
+                  className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary hover:opacity-90 flex items-center gap-1.5"
                 >
-                  Export Report
+                  <span className="material-symbols-outlined text-base">print</span>
+                  <span>{tPortal("exportReport", "Export Report")}</span>
                 </button>
               </div>
             </div>
           </header>
 
-          <div className="mx-auto max-w-7xl space-y-6 px-6 py-8">
+          <div className="mx-auto max-w-7xl space-y-8 px-6 py-8">
+            {/* ==============================================================
+                PRIMARY SECTION: PATIENT-LEVEL CHC/PHC ESCALATED REFERRALS
+                (Moved from Regional Hospital summary page per requirement)
+            ============================================================== */}
+            <section className="rounded-3xl border border-purple-200 bg-surface p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-outline-variant">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-100 text-purple-800">
+                      <span className="material-symbols-outlined text-lg">folder_shared</span>
+                    </span>
+                    <h2 className="text-lg font-bold text-on-surface">
+                      {tPortal("patientDossiersTitle", "CHC/PHC Escalated Referrals — Detailed Patient Dossiers")}
+                    </h2>
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-1">
+                    {tPortal("patientDossiersSubtitle", "Individual patient records, triage urgency, assigned specialists, and longitudinal timelines escalated from Community Health Centres.")}
+                  </p>
+                </div>
+
+                <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-900 self-start md:self-auto">
+                  {filteredEscalated.length} {tPortal("patientsActiveInContinuum", "Patients Active in Continuum")}
+                </span>
+              </div>
+
+              {/* Filters for Patient Dossiers */}
+              <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">
+                    search
+                  </span>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={tPortal("searchDossiersPlaceholder", "Search by patient name, ID, village, or clinical condition...")}
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-9 py-2 text-xs outline-none focus:border-purple-600 font-medium"
+                  />
+                </div>
+
+                <select
+                  value={triageFilter}
+                  onChange={(e) => setTriageFilter(e.target.value)}
+                  className="rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-xs font-semibold outline-none focus:border-purple-600"
+                >
+                  <option value="All">{tPortal("allTriageLevels", "All Triage Levels")}</option>
+                  <option value="RED">{tPortal("emergencyRedCases", "Emergency Red Cases")}</option>
+                  <option value="YELLOW">{tPortal("yellowHigh", "High / Urgent Yellow Cases")}</option>
+                  <option value="GREEN">{tPortal("greenRoutine", "Normal / Green Cases")}</option>
+                </select>
+              </div>
+
+              {/* Patient Level Details Table */}
+              <div className="mt-5 overflow-x-auto rounded-2xl border border-outline-variant">
+                <table className="w-full min-w-[1050px] text-left">
+                  <thead className="border-b border-outline-variant bg-surface-container-low text-xs uppercase font-bold text-on-surface-variant">
+                    <tr>
+                      <th className="px-5 py-3.5">{tPortal("patientAndIdentity", "Patient & Identity")}</th>
+                      <th className="px-5 py-3.5">{tPortal("pathwayChcToRegional", "Pathway (From CHC → Regional)")}</th>
+                      <th className="px-5 py-3.5">{tPortal("triageStatus", "Triage Status")}</th>
+                      <th className="px-5 py-3.5">{tPortal("assignedSpecialist", "Assigned Specialist")}</th>
+                      <th className="px-5 py-3.5">{tPortal("continuumStage", "Continuum Stage")}</th>
+                      <th className="px-5 py-3.5 text-right">{tPortal("dossierActions", "Dossier Actions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant text-xs">
+                    {filteredEscalated.map((item) => (
+                      <tr key={item.id} className="hover:bg-surface-container-low/60 transition">
+                        {/* Patient & Identity */}
+                        <td className="px-5 py-4">
+                          <p className="font-bold text-sm text-on-surface">{item.patientName}</p>
+                          <p className="text-on-surface-variant">
+                            {item.patientId} • {item.ageGender}
+                          </p>
+                          <p className="mt-0.5 font-mono text-[11px] font-semibold text-purple-700">
+                            {item.id}
+                          </p>
+                          <p className="mt-1 text-[11px] text-on-surface-variant flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[13px] text-primary">location_on</span>
+                            {item.village}, {item.block} ({item.district})
+                          </p>
+                        </td>
+
+                        {/* Pathway */}
+                        <td className="px-5 py-4">
+                          <div className="flex flex-col gap-1 text-[11px]">
+                            <span className="text-on-surface-variant flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[13px]">arrow_upward</span>
+                              From: <strong className="text-on-surface">{item.fromFacilityOrWorker}</strong>
+                            </span>
+                            <span className="text-purple-800 flex items-center gap-1 font-semibold">
+                              <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                              To: <strong className="text-purple-950">{item.toFacility}</strong>
+                            </span>
+                          </div>
+                          <p className="mt-1 font-semibold text-primary line-clamp-1 max-w-[220px]">
+                            {item.category}
+                          </p>
+                          <p className="mt-0.5 line-clamp-2 max-w-[220px] text-on-surface-variant text-[11px]" title={item.clinicalNotes}>
+                            {item.clinicalNotes}
+                          </p>
+                        </td>
+
+                        {/* Triage Status */}
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                              item.triageLevel === "RED"
+                                ? "bg-red-100 text-red-800 animate-pulse border border-red-200"
+                                : item.triageLevel === "YELLOW"
+                                ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            }`}
+                          >
+                            Triage {item.triageLevel}
+                          </span>
+                          <p className="mt-1 text-[11px] font-semibold text-on-surface-variant">
+                            {item.priority} Urgency
+                          </p>
+                        </td>
+
+                        {/* Assigned Specialist */}
+                        <td className="px-5 py-4">
+                          <p className="font-bold text-on-surface">
+                            {item.assignedDoctor || "Regional Duty Specialist"}
+                          </p>
+                          <p className="text-[11px] text-on-surface-variant mt-0.5">
+                            Transport: {item.escortTransport}
+                          </p>
+                        </td>
+
+                        {/* Continuum Stage Stepper */}
+                        <td className="px-5 py-4">
+                          <ReferralStatusStepper currentStage={item.status} isCompact />
+                          <p className="mt-1 text-[11px] text-on-surface-variant line-clamp-1 max-w-[190px]">
+                            {item.lastAction}
+                          </p>
+                        </td>
+
+                        {/* Dossier Actions */}
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRecordForReferral(item)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
+                              title="View Longitudinal Health Record"
+                            >
+                              <span className="material-symbols-outlined text-[15px] text-purple-700">history_edu</span>
+                              <span>Record</span>
+                            </button>
+
+                            <Link
+                              to={`/dashboard/referrals/${item.id}`}
+                              className="inline-flex items-center gap-1 rounded-lg bg-purple-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-purple-800"
+                            >
+                              <span>Manage</span>
+                              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
             {/* Summary cards */}
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 title="Total Referrals"
                 value={String(totalReferrals)}
-                description="Across all facilities"
+                description="Across all regional facilities"
               />
 
               <StatCard
@@ -252,7 +438,7 @@ export function ReportsPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-on-surface-variant">
-                  Overall referral completion rate.
+                  Overall referral completion rate across regional health network.
                 </p>
 
                 <div className="mt-8 flex items-center justify-center">
@@ -290,196 +476,77 @@ export function ReportsPage() {
               {/* Status distribution */}
               <div className="rounded-2xl border border-outline-variant bg-surface p-6 shadow-sm lg:col-span-2">
                 <h2 className="text-lg font-bold">
-                  Referral Status
+                  Referral Status Breakdown
                 </h2>
 
                 <p className="mt-1 text-sm text-on-surface-variant">
-                  Current distribution of referrals.
+                  Current distribution of referrals across care stages.
                 </p>
 
                 <div className="mt-8 space-y-6">
                   <div>
-                    <div className="mb-2 flex justify-between text-sm">
-                      <span>Completed</span>
-                      <span className="font-semibold">244</span>
+                    <div className="flex justify-between text-sm font-semibold mb-1">
+                      <span>Completed ({completedReferrals})</span>
+                      <span>{Math.round((completedReferrals / totalReferrals) * 100)}%</span>
                     </div>
-
-                    <div className="h-3 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className="h-full rounded-full bg-emerald-500"
-                        style={{ width: "72%" }}
-                      />
+                    <div className="h-3 w-full rounded-full bg-surface-container overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(completedReferrals / totalReferrals) * 100}%` }} />
                     </div>
                   </div>
 
                   <div>
-                    <div className="mb-2 flex justify-between text-sm">
-                      <span>Pending</span>
-                      <span className="font-semibold">48</span>
+                    <div className="flex justify-between text-sm font-semibold mb-1">
+                      <span>Pending Verification ({pendingReferrals})</span>
+                      <span>{Math.round((pendingReferrals / totalReferrals) * 100)}%</span>
                     </div>
-
-                    <div className="h-3 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className="h-full rounded-full bg-amber-400"
-                        style={{ width: "14%" }}
-                      />
+                    <div className="h-3 w-full rounded-full bg-surface-container overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${(pendingReferrals / totalReferrals) * 100}%` }} />
                     </div>
                   </div>
 
                   <div>
-                    <div className="mb-2 flex justify-between text-sm">
-                      <span>In Progress</span>
-                      <span className="font-semibold">29</span>
+                    <div className="flex justify-between text-sm font-semibold mb-1">
+                      <span>Overdue Escalations ({overdueReferrals})</span>
+                      <span>{Math.round((overdueReferrals / totalReferrals) * 100)}%</span>
                     </div>
-
-                    <div className="h-3 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className="h-full rounded-full bg-blue-500"
-                        style={{ width: "9%" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 flex justify-between text-sm">
-                      <span>Overdue</span>
-                      <span className="font-semibold">17</span>
-                    </div>
-
-                    <div className="h-3 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className="h-full rounded-full bg-red-500"
-                        style={{ width: "5%" }}
-                      />
+                    <div className="h-3 w-full rounded-full bg-surface-container overflow-hidden">
+                      <div className="h-full bg-red-500 rounded-full" style={{ width: `${(overdueReferrals / totalReferrals) * 100}%` }} />
                     </div>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Monthly activity */}
+            {/* Facility performance breakdown */}
             <section className="rounded-2xl border border-outline-variant bg-surface p-6 shadow-sm">
-              <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
-                <div>
-                  <h2 className="text-lg font-bold">
-                    Monthly Referral Activity
-                  </h2>
-
-                  <p className="mt-1 text-sm text-on-surface-variant">
-                    Number of referrals created each month.
-                  </p>
-                </div>
-
-                <span className="text-sm font-semibold text-primary">
-                  6 month overview
-                </span>
-              </div>
-
-              <div className="mt-8 flex h-64 items-end justify-between gap-3">
-                {monthlyData.map((item) => {
-                  const height =
-                    (item.referrals / maxMonthlyReferrals) * 100;
-
-                  return (
-                    <div
-                      key={item.month}
-                      className="flex h-full flex-1 flex-col items-center justify-end"
-                    >
-                      <span className="mb-2 text-xs font-semibold">
-                        {item.referrals}
-                      </span>
-
-                      <div
-                        className="w-full max-w-16 rounded-t-xl bg-primary"
-                        style={{ height: `${height}%` }}
-                      />
-
-                      <span className="mt-3 text-xs text-on-surface-variant">
-                        {item.month}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Facility performance */}
-            <section className="rounded-2xl border border-outline-variant bg-surface shadow-sm">
-              <div className="border-b border-outline-variant p-6">
-                <h2 className="text-lg font-bold">
-                  Facility Referral Performance
-                </h2>
-
-                <p className="mt-1 text-sm text-on-surface-variant">
-                  Referral activity and completion across facilities.
-                </p>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px]">
-                  <thead>
-                    <tr className="border-b border-outline-variant bg-surface-container text-left">
-                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
-                        Facility
-                      </th>
-
-                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
-                        Referrals
-                      </th>
-
-                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
-                        Completed
-                      </th>
-
-                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
-                        Pending
-                      </th>
-
-                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
-                        Completion
-                      </th>
+              <h2 className="text-lg font-bold">Facility Referral Performance</h2>
+              <p className="mt-1 text-sm text-on-surface-variant">Breakdown of incoming and completed referrals by facility tier.</p>
+              <div className="mt-5 overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-outline-variant text-xs uppercase font-bold text-on-surface-variant">
+                    <tr>
+                      <th className="py-3 px-4">Facility Name</th>
+                      <th className="py-3 px-4">Total Referrals</th>
+                      <th className="py-3 px-4">Completed</th>
+                      <th className="py-3 px-4">Pending</th>
+                      <th className="py-3 px-4">Performance Rate</th>
                     </tr>
                   </thead>
-
-                  <tbody>
-                    {facilityReports.map((facility) => {
-                      const rate = Math.round(
-                        (facility.completed / facility.referrals) * 100,
-                      );
-
+                  <tbody className="divide-y divide-outline-variant">
+                    {facilityReports.map((f) => {
+                      const rate = Math.round((f.completed / f.referrals) * 100);
                       return (
-                        <tr
-                          key={facility.name}
-                          className="border-b border-outline-variant last:border-b-0 hover:bg-surface-container/50"
-                        >
-                          <td className="px-6 py-5 font-semibold">
-                            {facility.name}
-                          </td>
-
-                          <td className="px-6 py-5 text-sm">
-                            {facility.referrals}
-                          </td>
-
-                          <td className="px-6 py-5 text-sm">
-                            {facility.completed}
-                          </td>
-
-                          <td className="px-6 py-5 text-sm">
-                            {facility.pending}
-                          </td>
-
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
-                              <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-200">
-                                <div
-                                  className="h-full rounded-full bg-primary"
-                                  style={{ width: `${rate}%` }}
-                                />
+                        <tr key={f.name} className="hover:bg-surface-container-low transition">
+                          <td className="py-3 px-4 font-bold">{f.name}</td>
+                          <td className="py-3 px-4">{f.referrals}</td>
+                          <td className="py-3 px-4 text-emerald-700 font-semibold">{f.completed}</td>
+                          <td className="py-3 px-4 text-amber-700 font-semibold">{f.pending}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-24 bg-surface-container rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${rate}%` }} />
                               </div>
-
-                              <span className="text-sm font-semibold">
-                                {rate}%
-                              </span>
+                              <span className="text-xs font-bold">{rate}%</span>
                             </div>
                           </td>
                         </tr>
@@ -489,103 +556,16 @@ export function ReportsPage() {
                 </table>
               </div>
             </section>
-
-            {/* Priority breakdown */}
-            <section className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-2xl border border-outline-variant bg-surface p-6 shadow-sm">
-                <h2 className="text-lg font-bold">
-                  Referral Priority
-                </h2>
-
-                <p className="mt-1 text-sm text-on-surface-variant">
-                  Distribution by clinical priority.
-                </p>
-
-                <div className="mt-7 space-y-5">
-                  <div className="flex items-center justify-between rounded-xl bg-surface-container p-4">
-                    <div>
-                      <p className="font-semibold">Routine</p>
-                      <p className="text-xs text-on-surface-variant">
-                        Standard referrals
-                      </p>
-                    </div>
-
-                    <span className="text-xl font-bold">182</span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl bg-amber-50 p-4">
-                    <div>
-                      <p className="font-semibold text-amber-800">
-                        Urgent
-                      </p>
-                      <p className="text-xs text-amber-700">
-                        Requires faster attention
-                      </p>
-                    </div>
-
-                    <span className="text-xl font-bold text-amber-800">
-                      113
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl bg-red-50 p-4">
-                    <div>
-                      <p className="font-semibold text-red-800">
-                        Emergency
-                      </p>
-                      <p className="text-xs text-red-700">
-                        Immediate attention required
-                      </p>
-                    </div>
-
-                    <span className="text-xl font-bold text-red-800">
-                      43
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Recent activity */}
-              <div className="rounded-2xl border border-outline-variant bg-surface shadow-sm">
-                <div className="border-b border-outline-variant p-6">
-                  <h2 className="text-lg font-bold">
-                    Recent Referral Activity
-                  </h2>
-
-                  <p className="mt-1 text-sm text-on-surface-variant">
-                    Latest referral updates.
-                  </p>
-                </div>
-
-                <div>
-                  {recentReferrals.map((referral) => (
-                    <div
-                      key={referral.id}
-                      className="flex items-center justify-between gap-4 border-b border-outline-variant p-5 last:border-b-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">
-                          {referral.patient}
-                        </p>
-
-                        <p className="mt-1 truncate text-xs text-on-surface-variant">
-                          {referral.id} · {referral.facility}
-                        </p>
-
-                        <p className="mt-1 text-xs text-on-surface-variant">
-                          {referral.date}
-                        </p>
-                      </div>
-
-                      <StatusBadge status={referral.status} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
           </div>
         </main>
       </div>
+
+      {/* Longitudinal Patient Record Drawer for Patient Dossiers */}
+      <PatientRecordDrawer
+        patient={selectedPatientForRecord}
+        isOpen={recordDrawerOpen}
+        onClose={() => setRecordDrawerOpen(false)}
+      />
     </div>
   );
 }

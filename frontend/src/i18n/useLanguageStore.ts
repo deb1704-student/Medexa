@@ -6,59 +6,9 @@ import {
   type LanguageInfo,
 } from "./languages";
 import { TRANSLATIONS, type TranslationSchema } from "./translations";
+import { PORTAL_TRANSLATIONS } from "./portalTranslations";
 
 const STORAGE_KEY = "medexa_preferred_language";
-
-export function triggerGoogleTranslate(lang: LanguageCode) {
-  if (typeof window === "undefined") return;
-
-  try {
-    document.documentElement.lang = lang;
-
-    const host = window.location.hostname;
-    const cookieVal = lang === "en" ? "" : `/en/${lang}`;
-
-    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${host};`;
-
-    if (lang !== "en") {
-      document.cookie = `googtrans=${cookieVal}; path=/;`;
-      document.cookie = `googtrans=${cookieVal}; domain=${host}; path=/;`;
-    }
-
-    const setComboValue = () => {
-      const combo = document.querySelector(".goog-te-combo") as HTMLSelectElement | null;
-      if (combo) {
-        const val = lang === "en" ? "" : lang;
-        if (combo.value !== val) {
-          combo.value = val;
-          combo.dispatchEvent(new Event("change"));
-        }
-        return true;
-      }
-      return false;
-    };
-
-    if (!setComboValue()) {
-      setTimeout(setComboValue, 200);
-      setTimeout(setComboValue, 600);
-      setTimeout(setComboValue, 1200);
-    }
-  } catch (e) {
-    console.warn("Failed to trigger google translate", e);
-  }
-}
-
-interface LanguageState {
-  language: LanguageCode;
-  setLanguage: (lang: LanguageCode) => void;
-  t: <S extends keyof TranslationSchema, K extends keyof TranslationSchema[S]>(
-    section: S,
-    key: K
-  ) => string;
-  tPortal: (key: string, fallback?: string, langOverride?: LanguageCode) => string;
-  getLanguageInfo: () => LanguageInfo;
-}
 
 const getInitialLanguage = (): LanguageCode => {
   if (typeof window === "undefined") return DEFAULT_LANGUAGE;
@@ -74,8 +24,19 @@ const getInitialLanguage = (): LanguageCode => {
 };
 
 const initialLang = getInitialLanguage();
-if (typeof window !== "undefined" && initialLang !== DEFAULT_LANGUAGE) {
-  setTimeout(() => triggerGoogleTranslate(initialLang), 500);
+if (typeof window !== "undefined") {
+  document.documentElement.lang = initialLang;
+}
+
+interface LanguageState {
+  language: LanguageCode;
+  setLanguage: (lang: LanguageCode) => void;
+  t: <S extends keyof TranslationSchema, K extends keyof TranslationSchema[S]>(
+    section: S,
+    key: K
+  ) => string;
+  tPortal: (key: string, fallback?: string, langOverride?: LanguageCode) => string;
+  getLanguageInfo: () => LanguageInfo;
 }
 
 export const useLanguageStore = create<LanguageState>((set, get) => ({
@@ -85,12 +46,12 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
     try {
       if (typeof window !== "undefined") {
         localStorage.setItem(STORAGE_KEY, lang);
+        document.documentElement.lang = lang;
       }
     } catch (e) {
       console.warn("Could not write language to localStorage", e);
     }
     set({ language: lang });
-    triggerGoogleTranslate(lang);
   },
 
   t: <S extends keyof TranslationSchema, K extends keyof TranslationSchema[S]>(
@@ -109,11 +70,25 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
 
   tPortal: (key: string, fallback?: string, langOverride?: LanguageCode): string => {
     const lang = langOverride || get().language;
+    
+    // Check portalTranslations first
+    if (PORTAL_TRANSLATIONS[lang]?.[key]) {
+      return PORTAL_TRANSLATIONS[lang][key];
+    }
+
+    // Check translations.ts portal dictionary
     const currentDict = TRANSLATIONS[lang] || TRANSLATIONS[DEFAULT_LANGUAGE];
     const portal = currentDict.portal as Record<string, string> | undefined;
     if (portal && portal[key]) {
       return portal[key];
     }
+
+    // Check default english portalTranslations
+    if (PORTAL_TRANSLATIONS[DEFAULT_LANGUAGE]?.[key]) {
+      return PORTAL_TRANSLATIONS[DEFAULT_LANGUAGE][key];
+    }
+
+    // Check default translations.ts portal dictionary
     const defaultPortal = TRANSLATIONS[DEFAULT_LANGUAGE].portal as Record<string, string> | undefined;
     return (defaultPortal && defaultPortal[key]) || fallback || key;
   },

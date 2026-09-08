@@ -13,19 +13,19 @@ import { useLanguageStore } from "@/i18n/useLanguageStore";
 
 const FACILITY_FILTER_OPTIONS = [
   "All Facilities",
-  "Belur Block PHC",
-  "Joypur Block CHC",
-  "Sonamukhi Rural Hospital (Block CHC)",
-  "District Hospital",
+  "Belur CHC",
+  "Joypur CHC",
+  "Sonamukhi CHC",
+  "Regional Hospital",
 ];
 
 const TRIAGE_FILTER_OPTIONS = ["All Triage Levels", "RED", "YELLOW", "GREEN"];
 
 const STATUS_FILTER_OPTIONS = [
   "All Statuses",
-  "At Block Office",
-  "Referred to Block",
-  "Escalated to District",
+  "At CHC/PHC",
+  "Referred to CHC/PHC",
+  "Escalated to Regional Hospital",
   "In Consultation",
   "Back-Referred",
 ];
@@ -55,7 +55,7 @@ export function RuralOfficeDashboardPage() {
   // Single Dedicated Block Officer Auth Modal
   const [blockAuthOpen, setBlockAuthOpen] = useState(false);
 
-  // New Block Referral Modal (To District Office)
+  // New CHC/PHC Referral Modal (To Regional Hospital)
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [newGeo, setNewGeo] = useState<GeoValue>({
     state: "West Bengal",
@@ -66,19 +66,19 @@ export function RuralOfficeDashboardPage() {
 
   const [newPatientName, setNewPatientName] = useState("");
   const [newAgeGender, setNewAgeGender] = useState("");
-  const [newFromFacility, setNewFromFacility] = useState("Belur Block PHC");
-  const [newToFacility, setNewToFacility] = useState("Bankura District General Hospital");
+  const [newFromFacility, setNewFromFacility] = useState("Belur Community Health Centre (CHC)");
+  const [newToFacility, setNewToFacility] = useState("Regional Hospital");
   const [newTriage, setNewTriage] = useState<UnifiedReferral["triageLevel"]>("RED");
   const [newSpecialty, setNewSpecialty] = useState("Emergency Cardiology");
   const [newDoctor] = useState("Dr. A. Sen (Chief Specialist)");
   const [newTransport, setNewTransport] = useState("108 ALS Ambulance");
   const [newReason, setNewReason] = useState("");
 
-  // Escalate to District Modal
+  // Escalate to Regional Hospital Modal
   const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
   const [selectedReferralToEscalate, setSelectedReferralToEscalate] = useState<UnifiedReferral | null>(null);
-  const [escalateHospital, setEscalateHospital] = useState("Bankura District Hospital");
-  const [escalateDoctor, setEscalateDoctor] = useState("Dr. A. Sen (Tertiary Specialist)");
+  const [escalateHospital, setEscalateHospital] = useState("Regional Hospital");
+  const [escalateDoctor, setEscalateDoctor] = useState("Dr. A. Sen (Regional Hospital Specialist)");
   const [escalateTransport, setEscalateTransport] = useState("108 ALS Ambulance");
   const [escalateNotes, setEscalateNotes] = useState("");
 
@@ -300,9 +300,9 @@ export function RuralOfficeDashboardPage() {
         <main className="min-h-screen flex-1 md:ml-64 p-4 sm:p-6 md:p-8">
           {/* Dedicated Role-Scoped Portal Header */}
           <PortalHeader
-            portalName={tPortal("blockPortalTitle", "Block Office Referral", language)}
+            portalName={tPortal("blockPortalTitle", "Community Health Centre (CHC)", language)}
             portalIcon="domain"
-            tierBadge={tPortal("blockPortalTier", "Block Tier (PHC / CHC)", language)}
+            tierBadge={tPortal("blockPortalTier", "Community Health Centre (CHC) Tier", language)}
             themeColor="indigo"
             user={blockOfficerUser}
             onLogout={logoutBlockOfficer}
@@ -316,7 +316,7 @@ export function RuralOfficeDashboardPage() {
                   className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-indigo-800 active:scale-[0.98]"
                 >
                   <span className="material-symbols-outlined text-base">add_circle</span>
-                  <span>{tPortal("createBlockReferral", "Create Block Referral")}</span>
+                  <span>{tPortal("createBlockReferral", "Create CHC Referral")}</span>
                 </button>
               ) : null
             }
@@ -330,11 +330,11 @@ export function RuralOfficeDashboardPage() {
                   <span className="material-symbols-outlined text-4xl">lock</span>
                 </div>
                 <span className="inline-block rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-bold text-indigo-700 mb-2">
-                  {tPortal("blockPortalTier", "Block Health Office Tier")}
+                  {tPortal("blockPortalTier", "Community Health Centre (CHC) Tier")}
                 </span>
-                <h2 className="text-2xl font-bold text-on-surface">{tPortal("blockAuthRequired", "Block Medical Officer Authentication Required")}</h2>
+                <h2 className="text-2xl font-bold text-on-surface">{tPortal("blockAuthRequired", "CHC Medical Officer Authentication Required")}</h2>
                 <p className="mt-2 text-sm text-on-surface-variant max-w-md mx-auto">
-                  {tPortal("blockAuthDesc", "Access to Block Health Office triage, PHC bed allocation, and 108 emergency escalation requires verified BMOH / MOIC credentials.")}
+                  {tPortal("blockAuthDesc", "Access to CHC / PHC triage, bed allocation, and emergency escalation requires verified MOIC / BMOH credentials.")}
                 </p>
 
                 <div className="mt-6 border-t border-outline-variant pt-6 text-left">
@@ -344,19 +344,19 @@ export function RuralOfficeDashboardPage() {
                     className="w-full flex items-center justify-center gap-2 rounded-2xl bg-indigo-700 py-3.5 px-6 font-bold text-white shadow-md hover:bg-indigo-800 active:scale-[0.98] transition"
                   >
                     <span className="material-symbols-outlined">key</span>
-                    <span>{tPortal("loginAsBlockOfficer", "Login as Block Officer")}</span>
+                    <span>{tPortal("loginAsBlockOfficer", "Login as CHC Officer")}</span>
                   </button>
 
                   <div className="mt-6 rounded-2xl border border-outline-variant bg-surface-container-low p-4 text-xs">
                     <p className="font-bold text-on-surface flex items-center gap-1.5 mb-2">
                       <span className="material-symbols-outlined text-base text-indigo-700">badge</span>
-                      <span>Registered Block Health Officers (Registry Database):</span>
+                      <span>Registered CHC Medical Officers (Registry Database):</span>
                     </p>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-outline-variant/60">
                         <div>
                           <p className="font-bold text-on-surface">Dr. Anirban Roy (BHO-WB-204)</p>
-                          <p className="text-[11px] text-on-surface-variant">Belur Block PHC • PIN: 4321</p>
+                          <p className="text-[11px] text-on-surface-variant">Belur PHC / CHC • PIN: 4321</p>
                         </div>
                         <button
                           type="button"
@@ -371,7 +371,7 @@ export function RuralOfficeDashboardPage() {
                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-outline-variant/60">
                         <div>
                           <p className="font-bold text-on-surface">Dr. P. Mukherjee (BHO-WB-205)</p>
-                          <p className="text-[11px] text-on-surface-variant">Joypur Block CHC • PIN: 4321</p>
+                          <p className="text-[11px] text-on-surface-variant">Joypur CHC • PIN: 4321</p>
                         </div>
                         <button
                           type="button"
@@ -399,71 +399,87 @@ export function RuralOfficeDashboardPage() {
               </div>
             </div>
           ) : (
-            /* AUTHENTICATED BLOCK PORTAL CONTENT */
+            /* AUTHENTICATED CHC PORTAL CONTENT */
             <div className="space-y-6">
-              {/* Geographic Hierarchy Context */}
+              {/* Geographic Hierarchy Context & Quick Navigation to Secondary Services */}
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 px-4 py-3 text-xs">
                 <div className="flex items-center gap-2 text-indigo-900 font-medium">
                   <span className="material-symbols-outlined text-base text-indigo-700">domain</span>
-                  <span><strong>Block Command Tier:</strong> West Bengal → Bankura District → Joypur & Belur Block Health Office</span>
+                  <span><strong>CHC Command Tier:</strong> West Bengal → Bankura District → Joypur & Belur CHC / PHC</span>
                 </div>
-                <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 font-bold text-indigo-800">
-                  {blockOfficerUser?.facilityOrVillage || "Block Primary Health Centre"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 font-bold text-indigo-800">
+                    {blockOfficerUser?.facilityOrVillage || "Community Health Centre (CHC)"}
+                  </span>
+                  <Link
+                    to="/dashboard/medicines"
+                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition"
+                  >
+                    <span className="material-symbols-outlined text-sm">medication</span>
+                    <span>Medicines</span>
+                  </Link>
+                  <Link
+                    to="/dashboard/diagnostics"
+                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition"
+                  >
+                    <span className="material-symbols-outlined text-sm">biotech</span>
+                    <span>Diagnostics</span>
+                  </Link>
+                </div>
               </div>
 
             {/* KPI Metric Cards */}
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-on-surface-variant">{tPortal("blockCaseload", "Block Referral Queue")}</p>
+              <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md min-h-[140px] flex flex-col justify-between">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-on-surface-variant break-words">{tPortal("blockCaseload", "CHC Referral Queue")}</p>
                     <h3 className="mt-2 text-3xl font-bold text-on-surface">{totalBlockCases}</h3>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-indigo-800">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-800">
                     <span className="material-symbols-outlined">domain</span>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-on-surface-variant">{tPortal("allBlockCases", "Active at this Block Office")}</p>
+                <p className="mt-3 text-xs text-on-surface-variant break-words">{tPortal("allBlockCases", "Active at this CHC / PHC")}</p>
               </div>
 
-              <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-on-surface-variant">{tPortal("villageReferrals", "Received From ASHA")}</p>
+              <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md min-h-[140px] flex flex-col justify-between">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-on-surface-variant break-words">{tPortal("villageReferrals", "Received From ASHA")}</p>
                     <h3 className="mt-2 text-3xl font-bold text-primary">{fromAshaCount}</h3>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <span className="material-symbols-outlined">volunteer_activism</span>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-on-surface-variant">{tPortal("villageCases", "Frontline village incoming")}</p>
+                <p className="mt-3 text-xs text-on-surface-variant break-words">{tPortal("villageCases", "Frontline village incoming")}</p>
               </div>
 
-              <div className="rounded-2xl border border-red-200 bg-red-50/40 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-red-800">{tPortal("emergencyRedTriage", "Emergency Red Triage")}</p>
+              <div className="rounded-2xl border border-red-200 bg-red-50/40 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md min-h-[140px] flex flex-col justify-between">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-red-800 break-words">{tPortal("emergencyRedTriage", "Emergency Red Triage")}</p>
                     <h3 className="mt-2 text-3xl font-bold text-red-900">{redEmergencyCount}</h3>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-700">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-700">
                     <span className="material-symbols-outlined">crisis_alert</span>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-red-700 font-medium">{tPortal("criticalCare", "Critical patient care")}</p>
+                <p className="mt-3 text-xs text-red-700 font-medium break-words">{tPortal("criticalCare", "Critical patient care")}</p>
               </div>
 
-              <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-on-surface-variant">{tPortal("escalatedToDistrict", "Escalated To District")}</p>
+              <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md min-h-[140px] flex flex-col justify-between">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-on-surface-variant break-words">{tPortal("escalatedToDistrict", "Escalated To Regional Hospital")}</p>
                     <h3 className="mt-2 text-3xl font-bold text-indigo-700">{escalatedToDistrictCount}</h3>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-indigo-800">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-800">
                     <span className="material-symbols-outlined">local_hospital</span>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-on-surface-variant">{tPortal("tertiaryTransfers", "Tertiary hospital transfers")}</p>
+                <p className="mt-3 text-xs text-on-surface-variant break-words">{tPortal("tertiaryTransfers", "Regional hospital transfers")}</p>
               </div>
             </section>
 
@@ -471,9 +487,9 @@ export function RuralOfficeDashboardPage() {
             <section className="rounded-3xl border border-outline-variant bg-surface-container-low p-5">
               <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-lg font-bold">{tPortal("blockTriageHeading", "Block Office Patient Triage & Escalations")}</h2>
+                  <h2 className="text-lg font-bold">{tPortal("blockTriageHeading", "Community Health Centre (CHC) Patient Triage & Escalations")}</h2>
                   <p className="text-sm text-on-surface-variant">
-                    {tPortal("blockTriageSubheading", "Incoming village referrals from ASHA and outgoing escalations to District Hospital")}
+                    {tPortal("blockTriageSubheading", "Incoming village referrals from ASHA and outgoing escalations to Regional Hospital")}
                   </p>
                 </div>
                 <span className="rounded-full bg-surface-container px-4 py-1.5 text-sm font-medium text-on-surface-variant">
@@ -639,7 +655,7 @@ export function RuralOfficeDashboardPage() {
                         {/* Management Actions */}
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {item.status !== "Escalated to District" && (
+                            {item.status !== "Escalated to District" && (item.status as string) !== "Escalated to Regional Hospital" && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -653,7 +669,7 @@ export function RuralOfficeDashboardPage() {
                                 className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-bold text-red-800 transition hover:bg-red-200"
                               >
                                 <span className="material-symbols-outlined text-[15px]">arrow_upward</span>
-                                {tPortal("escalateToDistrict", "Escalate To District")}
+                                {tPortal("escalateToDistrict", "Escalate To Regional Hospital")}
                               </button>
                             )}
 
@@ -687,7 +703,7 @@ export function RuralOfficeDashboardPage() {
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-container text-on-surface-variant">
                     <span className="material-symbols-outlined text-2xl">search_off</span>
                   </div>
-                  <h3 className="mt-3 font-bold">No referrals in Block Office queue</h3>
+                  <h3 className="mt-3 font-bold">No referrals in CHC / PHC queue</h3>
                   <p className="mt-1 text-sm text-on-surface-variant">
                     Try modifying facility filters or search terms.
                   </p>
@@ -707,7 +723,7 @@ export function RuralOfficeDashboardPage() {
       </div>
 
       {/* =========================================================
-          MODAL: CREATE NEW BLOCK REFERRAL (REFER TO DISTRICT OFFICE)
+          MODAL: CREATE NEW CHC REFERRAL (REFER TO REGIONAL HOSPITAL)
       ========================================================= */}
       {isNewModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -718,9 +734,9 @@ export function RuralOfficeDashboardPage() {
                   <span className="material-symbols-outlined text-2xl">domain</span>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">Create Block Office Referral</h2>
+                  <h2 className="text-xl font-bold">Create CHC Referral</h2>
                   <p className="text-xs text-on-surface-variant">
-                    Refer patient from Block PHC/CHC <strong>To District Office</strong>
+                    Refer patient from CHC/PHC <strong>To Regional Hospital</strong>
                   </p>
                 </div>
               </div>
@@ -782,31 +798,31 @@ export function RuralOfficeDashboardPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                    Referring Block Facility
+                    Referring CHC/PHC Facility
                   </label>
                   <select
                     value={newFromFacility}
                     onChange={(e) => setNewFromFacility(e.target.value)}
                     className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
                   >
-                    <option value="Belur Block PHC">Belur Block PHC</option>
-                    <option value="Joypur Block CHC">Joypur Block CHC</option>
-                    <option value="Sonamukhi Rural Hospital (Block CHC)">Sonamukhi Rural Hospital (Block CHC)</option>
+                    <option value="Belur PHC / CHC">Belur PHC / CHC</option>
+                    <option value="Joypur CHC">Joypur CHC</option>
+                    <option value="Sonamukhi Rural Hospital (CHC)">Sonamukhi Rural Hospital (CHC)</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                    Destination (To District Office) *
+                    Destination (To Regional Hospital) *
                   </label>
                   <select
                     value={newToFacility}
                     onChange={(e) => setNewToFacility(e.target.value)}
                     className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
                   >
-                    <option value="Bankura District General Hospital">Bankura District General Hospital</option>
-                    <option value="Medical College & Tertiary Hospital">Medical College & Tertiary Hospital</option>
-                    <option value="District Mother & Child Speciality Hospital">District Mother & Child Speciality Hospital</option>
+                    <option value="Bankura Regional Hospital">Bankura Regional Hospital</option>
+                    <option value="Regional Medical College & Tertiary Hospital">Regional Medical College & Tertiary Hospital</option>
+                    <option value="Regional Mother & Child Speciality Hospital">Regional Mother & Child Speciality Hospital</option>
                   </select>
                 </div>
               </div>
@@ -881,7 +897,7 @@ export function RuralOfficeDashboardPage() {
                   type="submit"
                   className="rounded-xl bg-indigo-700 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-800"
                 >
-                  Submit Referral To District Office
+                  Submit Referral To Regional Hospital
                 </button>
               </div>
             </form>
@@ -890,7 +906,7 @@ export function RuralOfficeDashboardPage() {
       )}
 
       {/* =========================================================
-          MODAL: ESCALATE EXISTING CASE TO DISTRICT HOSPITAL
+          MODAL: ESCALATE EXISTING CASE TO REGIONAL HOSPITAL
       ========================================================= */}
       {isEscalateModalOpen && selectedReferralToEscalate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -901,7 +917,7 @@ export function RuralOfficeDashboardPage() {
                   <span className="material-symbols-outlined text-2xl">emergency</span>
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold">Escalate Case To District Office</h2>
+                  <h2 className="text-lg font-bold">Escalate Case To Regional Hospital</h2>
                   <p className="text-xs text-on-surface-variant">
                     Patient: {selectedReferralToEscalate.patientName} ({selectedReferralToEscalate.patientId})
                   </p>
@@ -919,16 +935,16 @@ export function RuralOfficeDashboardPage() {
             <form onSubmit={handleEscalateSubmit} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                  Destination District Hospital
+                  Destination Regional Hospital
                 </label>
                 <select
                   value={escalateHospital}
                   onChange={(e) => setEscalateHospital(e.target.value)}
                   className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-primary"
                 >
-                  <option value="Bankura District General Hospital">Bankura District General Hospital</option>
-                  <option value="Medical College & Tertiary Hospital">Medical College & Tertiary Hospital</option>
-                  <option value="District Mother & Child Speciality Hospital">District Mother & Child Speciality Hospital</option>
+                  <option value="Bankura Regional Hospital">Bankura Regional Hospital</option>
+                  <option value="Regional Medical College & Tertiary Hospital">Regional Medical College & Tertiary Hospital</option>
+                  <option value="Regional Mother & Child Speciality Hospital">Regional Mother & Child Speciality Hospital</option>
                 </select>
               </div>
 
@@ -967,7 +983,7 @@ export function RuralOfficeDashboardPage() {
                   rows={3}
                   value={escalateNotes}
                   onChange={(e) => setEscalateNotes(e.target.value)}
-                  placeholder="Summarize vital signs, reason patient cannot be stabilized at Block Office, and urgency..."
+                  placeholder="Summarize vital signs, reason patient cannot be stabilized at CHC/PHC, and urgency..."
                   className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </div>
@@ -984,7 +1000,7 @@ export function RuralOfficeDashboardPage() {
                   type="submit"
                   className="rounded-xl bg-red-700 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-red-800"
                 >
-                  Confirm Escalation To District
+                  Confirm Escalation To Regional Hospital
                 </button>
               </div>
             </form>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLanguageStore } from "@/i18n/useLanguageStore";
 
 interface FacilityMetrics {
   facilityId: string;
@@ -33,6 +34,7 @@ export function FacilityContinuityTable({
   followUpComplianceAlertBelow = 70,
   delayAlertAboveHours = 12,
 }: FacilityContinuityTableProps) {
+  const { tPortal } = useLanguageStore();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("facilityName");
   const [sortAsc, setSortAsc] = useState(true);
@@ -62,7 +64,7 @@ export function FacilityContinuityTable({
       <div className="p-lg border-b border-outline-variant flex flex-wrap gap-md justify-between items-center bg-surface">
         <h2 className="font-headline-sm text-headline-sm text-on-surface flex items-center gap-2">
           <span className="material-symbols-outlined text-primary">business</span>
-          Facility Continuity
+          {tPortal("facilityContinuity", "Facility Continuity")}
         </h2>
         <div className="relative">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
@@ -70,7 +72,7 @@ export function FacilityContinuityTable({
           </span>
           <input
             className="pl-10 pr-4 py-2 bg-surface-container border border-outline-variant rounded-full font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all w-64"
-            placeholder="Search facilities..."
+            placeholder={tPortal("searchFacilities", "Search facilities...")}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -82,11 +84,11 @@ export function FacilityContinuityTable({
         <table className="w-full text-left border-collapse min-w-[800px]">
           <thead>
             <tr className="bg-surface-container-low border-b border-outline-variant text-on-surface-variant font-label-lg text-label-lg">
-              <SortableHeader label="Facility Name" sortKey="facilityName" current={sortKey} asc={sortAsc} onSort={toggleSort} />
-              <SortableHeader label="Total Referrals" sortKey="totalReferrals" current={sortKey} asc={sortAsc} onSort={toggleSort} />
-              <SortableHeader label="Completion Rate" sortKey="completionRatePercent" current={sortKey} asc={sortAsc} onSort={toggleSort} />
-              <SortableHeader label="Avg Referral Delay" sortKey="avgReferralDelayHours" current={sortKey} asc={sortAsc} onSort={toggleSort} />
-              <th className="p-md font-semibold">Follow-up Compliance</th>
+              <SortableHeader label={tPortal("facilityName", "Facility Name")} sortKey="facilityName" current={sortKey} asc={sortAsc} onSort={toggleSort} />
+              <SortableHeader label={tPortal("totalReferrals", "Total Referrals")} sortKey="totalReferrals" current={sortKey} asc={sortAsc} onSort={toggleSort} />
+              <SortableHeader label={tPortal("completionRate", "Completion Rate")} sortKey="completionRatePercent" current={sortKey} asc={sortAsc} onSort={toggleSort} />
+              <SortableHeader label={tPortal("avgReferralDelay", "Avg Referral Delay")} sortKey="avgReferralDelayHours" current={sortKey} asc={sortAsc} onSort={toggleSort} />
+              <th className="p-md font-semibold">{tPortal("followUpCompliance", "Follow-up Compliance")}</th>
             </tr>
           </thead>
           <tbody className="font-body-md text-body-md bg-surface-container-lowest">

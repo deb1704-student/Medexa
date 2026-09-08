@@ -61,9 +61,9 @@ export function DistrictOfficeAuthModal({
               <span className="material-symbols-outlined text-2xl">local_hospital</span>
             </div>
             <div>
-              <h2 className="text-lg font-bold">District Officer Authentication</h2>
+              <h2 className="text-lg font-bold">Regional Hospital Officer Authentication</h2>
               <p className="text-xs text-on-surface-variant">
-                District Health Office & Tertiary Hospital database verification
+                Regional Hospital & Tertiary Command database verification
               </p>
             </div>
           </div>
@@ -78,7 +78,7 @@ export function DistrictOfficeAuthModal({
 
         {districtOfficerUser && (
           <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50/50 p-3 text-xs flex items-center justify-between">
-            <span className="text-on-surface-variant">Active District Officer:</span>
+            <span className="text-on-surface-variant">Active Regional Officer:</span>
             <span className="font-bold text-purple-900">{districtOfficerUser.name} ({districtOfficerUser.id})</span>
           </div>
         )}
@@ -93,7 +93,7 @@ export function DistrictOfficeAuthModal({
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-              District Officer ID or Name (CMOH / Superintendent) *
+              Regional Hospital Officer ID or Name (CMOH / Superintendent) *
             </label>
             <input
               type="text"
@@ -107,7 +107,7 @@ export function DistrictOfficeAuthModal({
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-              District Officer Security PIN (4-digit) *
+              Officer Security PIN (4-digit) *
             </label>
             <input
               type="password"
@@ -127,7 +127,7 @@ export function DistrictOfficeAuthModal({
               type="submit"
               className="w-full rounded-xl bg-purple-700 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-purple-800"
             >
-              Verify with Database & Enter District Portal
+              Verify with Database & Enter Regional Portal
             </button>
           </div>
         </form>
@@ -135,7 +135,7 @@ export function DistrictOfficeAuthModal({
         {/* Database Quick Authenticate Buttons */}
         <div className="mt-5 border-t border-outline-variant pt-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">
-            Registered District Officers (Click to Authenticate):
+            Registered Regional Hospital Officers (Click to Authenticate):
           </p>
           <div className="space-y-1.5">
             <button
@@ -145,7 +145,7 @@ export function DistrictOfficeAuthModal({
             >
               <div>
                 <span className="font-bold text-purple-950">Dr. A. Sen</span>
-                <span className="text-on-surface-variant ml-1.5">(CMOH-DIST-101 • Chief Specialist)</span>
+                <span className="text-on-surface-variant ml-1.5">(CMOH-DIST-101 • Bankura Regional Hospital)</span>
               </div>
               <span className="font-mono text-[11px] text-purple-800 font-bold">PIN: 5678</span>
             </button>
@@ -156,7 +156,7 @@ export function DistrictOfficeAuthModal({
             >
               <div>
                 <span className="font-bold text-on-surface">Dr. S. Chatterjee</span>
-                <span className="text-on-surface-variant ml-1.5">(CMOH-DIST-102 • Medical Superintendent)</span>
+                <span className="text-on-surface-variant ml-1.5">(CMOH-DIST-102 • Purulia Regional Hospital)</span>
               </div>
               <span className="font-mono text-[11px] text-on-surface-variant">PIN: 5678</span>
             </button>

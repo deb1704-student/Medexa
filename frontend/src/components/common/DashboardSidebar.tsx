@@ -1,7 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { SyncIndicator } from "@/components/common/SyncIndicator";
 import { BrandMark } from "@/components/common/BrandMark";
-import { LanguageSelector } from "@/components/common/LanguageSelector";
 import { useAuth } from "@/auth/auth";
 import type { Role } from "@/auth/authTypes";
 import { useLanguageStore } from "@/i18n/useLanguageStore";
@@ -14,34 +13,74 @@ interface NavItemConfig {
   roles: Role[];
 }
 
-const ALL_NAV_ITEMS: NavItemConfig[] = [
-  // DISTRICT-ONLY ITEMS
+// ASHA FRONT-LINE NAV ORDER (1. Digital Triage, 2. Village Referral)
+const ASHA_NAV_ITEMS: NavItemConfig[] = [
   {
-    label: "Overview",
-    labelKey: "overview",
-    icon: "dashboard",
-    path: "/dashboard",
-    roles: ["DISTRICT"],
+    label: "Digital Triage",
+    labelKey: "digitalTriage",
+    icon: "vital_signs",
+    path: "/dashboard/referrals/asha?view=triage",
+    roles: ["ASHA"],
   },
   {
-    label: "District Referrals",
-    labelKey: "districtReferrals",
-    icon: "local_hospital",
-    path: "/dashboard/referrals/district-office",
-    roles: ["DISTRICT"],
+    label: "Village Referral",
+    labelKey: "villageReferrals",
+    icon: "volunteer_activism",
+    path: "/dashboard/referrals/asha?view=referral",
+    roles: ["ASHA"],
+  },
+];
+
+// CHC / PHC PRIMARY NAV ORDER (1. CHC/PHC Referrals, 2. Doctor Availability, 3. High-Risk Follow-up)
+const CHC_NAV_ITEMS: NavItemConfig[] = [
+  {
+    label: "CHC/PHC Referrals",
+    labelKey: "chcReferrals",
+    icon: "domain",
+    path: "/dashboard/referrals/block-office",
+    roles: ["BLOCK"],
   },
   {
-    label: "Medicines",
+    label: "Doctor Availability",
+    labelKey: "doctorAvailability",
+    icon: "stethoscope",
+    path: "/dashboard/doctor-availability",
+    roles: ["BLOCK"],
+  },
+  {
+    label: "High-Risk Follow-up",
+    labelKey: "highRiskFollowUp",
+    icon: "priority_high",
+    path: "/dashboard/follow-up",
+    roles: ["BLOCK"],
+  },
+];
+
+// CHC SECONDARY NAV (Medicine Availability, Diagnostics)
+const CHC_SECONDARY_ITEMS: NavItemConfig[] = [
+  {
+    label: "Medicine Availability",
     labelKey: "medicines",
     icon: "medication",
     path: "/dashboard/medicines",
-    roles: ["DISTRICT"],
+    roles: ["BLOCK"],
   },
   {
     label: "Diagnostics",
     labelKey: "diagnostics",
     icon: "biotech",
     path: "/dashboard/diagnostics",
+    roles: ["BLOCK"],
+  },
+];
+
+// REGIONAL HOSPITAL PRIMARY NAV ORDER (1. Referrals, 2. Doctor Availability, 3. Medicine Availability, 4. High-Risk Follow-up, 5. Overview, 6. Reports)
+const REGIONAL_NAV_ITEMS: NavItemConfig[] = [
+  {
+    label: "Regional Hospital Referrals",
+    labelKey: "regionalHospitalReferrals",
+    icon: "local_hospital",
+    path: "/dashboard/referrals/district-office",
     roles: ["DISTRICT"],
   },
   {
@@ -49,44 +88,29 @@ const ALL_NAV_ITEMS: NavItemConfig[] = [
     labelKey: "doctorAvailability",
     icon: "stethoscope",
     path: "/dashboard/doctor-availability",
-    roles: ["BLOCK", "DISTRICT"],
-  },
-
-  // BLOCK-ONLY ITEMS
-  {
-    label: "Block Referrals",
-    labelKey: "blockReferrals",
-    icon: "domain",
-    path: "/dashboard/referrals/block-office",
-    roles: ["BLOCK"],
-  },
-
-  // ASHA-ONLY ITEMS
-  {
-    label: "Village Referrals",
-    labelKey: "villageReferrals",
-    icon: "volunteer_activism",
-    path: "/dashboard/referrals/asha",
-    roles: ["ASHA"],
+    roles: ["DISTRICT"],
   },
   {
-    label: "Digital Triage",
-    labelKey: "digitalTriage",
-    icon: "vital_signs",
-    path: "/triage",
-    roles: ["ASHA"],
+    label: "Medicine Availability",
+    labelKey: "medicines",
+    icon: "medication",
+    path: "/dashboard/medicines",
+    roles: ["DISTRICT"],
   },
-
-  // SHARED ASHA, BLOCK & DISTRICT ITEMS
   {
     label: "High-Risk Follow-up",
     labelKey: "highRiskFollowUp",
     icon: "priority_high",
     path: "/dashboard/follow-up",
-    roles: ["ASHA", "BLOCK", "DISTRICT"],
+    roles: ["DISTRICT"],
   },
-
-  // DISTRICT REPORTS
+  {
+    label: "Overview",
+    labelKey: "overview",
+    icon: "dashboard",
+    path: "/dashboard",
+    roles: ["DISTRICT"],
+  },
   {
     label: "Reports",
     labelKey: "reports",
@@ -102,9 +126,15 @@ export function DashboardSidebar() {
   const { tPortal, language } = useLanguageStore();
 
   const userRole = user?.role;
-  const authorizedNavItems = userRole
-    ? ALL_NAV_ITEMS.filter((item) => item.roles.includes(userRole))
-    : [];
+
+  const authorizedNavItems =
+    userRole === "ASHA"
+      ? ASHA_NAV_ITEMS
+      : userRole === "BLOCK"
+      ? CHC_NAV_ITEMS
+      : userRole === "DISTRICT"
+      ? REGIONAL_NAV_ITEMS
+      : [];
 
   const handleLogout = () => {
     logout();
@@ -113,8 +143,8 @@ export function DashboardSidebar() {
 
   const getRoleLabel = () => {
     if (userRole === "ASHA") return tPortal("ashaVillagePortal", "ASHA Village Portal", language);
-    if (userRole === "BLOCK") return tPortal("blockHealthOffice", "Block Health Office", language);
-    if (userRole === "DISTRICT") return tPortal("districtOfficeCommand", "District Office Command", language);
+    if (userRole === "BLOCK") return tPortal("chcPortalTitle", "Community Health Centre (CHC)", language);
+    if (userRole === "DISTRICT") return tPortal("regionalHospitalCommand", "Regional Hospital Command", language);
     return tPortal("healthcarePortal", "Healthcare Portal", language);
   };
 
@@ -147,7 +177,7 @@ export function DashboardSidebar() {
       </div>
 
       {/* NAVIGATION - STRICTLY ROLE-AUTHORIZED */}
-      <nav className="flex-1 overflow-y-auto px-4 py-4">
+      <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         <div className="space-y-1.5">
           {authorizedNavItems.map((item) => (
             <NavLink
@@ -171,6 +201,37 @@ export function DashboardSidebar() {
             </NavLink>
           ))}
         </div>
+
+        {/* CHC Secondary Nav Section */}
+        {userRole === "BLOCK" && (
+          <div className="pt-3 border-t border-outline-variant/40">
+            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              More Facility Services
+            </p>
+            <div className="space-y-1">
+              {CHC_SECONDARY_ITEMS.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2.5 rounded-full px-4 py-2 text-xs transition ${
+                      isActive
+                        ? "bg-secondary-container text-primary font-semibold shadow-xs"
+                        : "text-on-surface-variant hover:bg-surface-container-highest"
+                    }`
+                  }
+                >
+                  <span className="material-symbols-outlined text-lg">
+                    {item.icon}
+                  </span>
+                  <span className="font-medium">
+                    {tPortal(item.labelKey, item.label)}
+                  </span>
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* USER IDENTITY & SIGN OUT */}
@@ -198,12 +259,8 @@ export function DashboardSidebar() {
         </div>
       )}
 
-      {/* SYNC & LANGUAGE STATUS */}
-      <div className="px-4 pb-5 pt-3 border-t border-outline-variant/40 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-on-surface-variant">{tPortal("languageLabel", "Language")}:</span>
-          <LanguageSelector />
-        </div>
+      {/* SYNC STATUS - REMOVED FLOATING BOTTOM-CORNER LANGUAGE WIDGET */}
+      <div className="px-4 pb-5 pt-3 border-t border-outline-variant/40">
         <SyncIndicator />
       </div>
     </aside>

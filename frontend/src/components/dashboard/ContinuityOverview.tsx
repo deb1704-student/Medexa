@@ -1,3 +1,5 @@
+import { useLanguageStore } from "@/i18n/useLanguageStore";
+
 interface ContinuityOverviewProps {
   totalReferrals: number;
   accepted: number;
@@ -27,6 +29,8 @@ export function ContinuityOverview({
   totalEligibleForCompletion,
   followUpsDue,
 }: ContinuityOverviewProps) {
+  const { tPortal } = useLanguageStore();
+
   const completionRate =
     totalEligibleForCompletion > 0 ? (completed / totalEligibleForCompletion) * 100 : 0;
   const followUpCompliance = followUpsDue > 0 ? (followUpCompleted / followUpsDue) * 100 : 0;
@@ -36,26 +40,26 @@ export function ContinuityOverview({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
-     <MetricCard label="Total Patient Referrals" value={totalReferrals.toLocaleString()} icon="sync_alt" />
-      <MetricCard label="Accepted" value={accepted.toLocaleString()} icon="thumb_up" />
-      <MetricCard label="Completed" value={completed.toLocaleString()} icon="check_circle" />
+      <MetricCard label={tPortal("totalPatientReferrals", "Total Patient Referrals")} value={totalReferrals.toLocaleString()} icon="sync_alt" />
+      <MetricCard label={tPortal("accepted", "Accepted")} value={accepted.toLocaleString()} icon="thumb_up" />
+      <MetricCard label={tPortal("completed", "Completed")} value={completed.toLocaleString()} icon="check_circle" />
       <MetricCard
-        label="Follow-up Completed"
+        label={tPortal("followUpCompleted", "Follow-up Completed")}
         value={followUpCompleted.toLocaleString()}
         icon="assignment_turned_in"
       />
 
-      <AlertMetricCard label="Overdue" value={overdue} icon="warning" tone="amber-accent" />
-      <AlertMetricCard label="No-show" value={noShow} icon="error" tone="red-accent" />
+      <AlertMetricCard label={tPortal("overdue", "Overdue")} value={overdue} icon="warning" tone="amber-accent" />
+      <AlertMetricCard label={tPortal("noShow", "No-show")} value={noShow} icon="error" tone="red-accent" />
 
       <PerformanceCard
-        label="Referral Completion Rate"
+        label={tPortal("referralCompletionRate", "Referral Completion Rate")}
         percent={completionRate}
         icon={completionTone === "green-accent" ? "trending_up" : "trending_flat"}
         tone={completionTone}
       />
       <PerformanceCard
-        label="Follow-up Compliance"
+        label={tPortal("followUpCompliance", "Follow-up Compliance")}
         percent={followUpCompliance}
         icon={complianceTone === "green-accent" ? "trending_up" : "trending_flat"}
         tone={complianceTone}

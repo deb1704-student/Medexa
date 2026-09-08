@@ -3,7 +3,7 @@ import React from "react";
 export interface FacilityScorecardData {
   facilityId: string;
   facilityName: string;
-  tier: "District Hospital" | "Block CHC" | "Block PHC";
+  tier: "District Hospital" | "Regional Hospital" | "Block CHC" | "Block PHC";
   block: string;
   district: string;
   totalBeds: number;
