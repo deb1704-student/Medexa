@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { AuthUser, AuthState, RegisteredCredential, Role } from "./authTypes";
+import type {
+  AuthUser,
+  AuthState,
+  RegisteredCredential,
+  Role,
+} from "./authTypes";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const HEALTH_REGISTRY_DATABASE: Record<string, RegisteredCredential> = {
   "ASHA-WB-401": {
@@ -148,10 +154,13 @@ const SESSION_STORAGE_KEY = "medexa_auth_session_v4";
  * In this architecture, all ASHA personas map to the backend's seeded ASHA account (asha.demo),
  * Block officers map to doctor.demo, and District officers map to officer.demo.
  * When a user logs in with their persona PIN, we authenticate locally and immediately
- * request a real JWT from POST /api/auth/login, saving it to localStorage ("auth_token").
+ * request a real JWT from POST /auth/login using the configured API base URL, saving it to localStorage ("auth_token").
  * This ensures every subsequent API request carries a valid backend bearer token with the correct RBAC role.
  */
-export const ROLE_TO_BACKEND_ACCOUNT: Record<Role, { username: string; password: string }> = {
+export const ROLE_TO_BACKEND_ACCOUNT: Record<
+  Role,
+  { username: string; password: string }
+> = {
   ASHA: { username: "asha.demo", password: "demo1234" },
   BLOCK: { username: "doctor.demo", password: "demo1234" },
   DISTRICT: { username: "officer.demo", password: "demo1234" },
@@ -165,7 +174,7 @@ export async function syncBackendJwt(role: Role): Promise<string | null> {
     formData.append("username", creds.username);
     formData.append("password", creds.password);
 
-    const res = await fetch("/api/auth/login", {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: formData.toString(),
@@ -212,7 +221,9 @@ function loadValidatedSession(): AuthUser | null {
 
     // Enforce role integrity: stored role must match authoritative registry
     if (parsed.role !== found.role) {
-      console.warn("Security Alert: Role manipulation detected in storage. Session invalidated.");
+      console.warn(
+        "Security Alert: Role manipulation detected in storage. Session invalidated.",
+      );
       localStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
@@ -236,7 +247,9 @@ function loadValidatedSession(): AuthUser | null {
 
 export const useAuthStore = create<AuthState>((set, get) => {
   const initialUser = loadValidatedSession();
-  const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("auth_token"));
+  const hasToken =
+    typeof window !== "undefined" &&
+    Boolean(localStorage.getItem("auth_token"));
 
   if (initialUser && !hasToken && typeof window !== "undefined") {
     syncBackendJwt(initialUser.role).then((token) => {
@@ -257,13 +270,15 @@ export const useAuthStore = create<AuthState>((set, get) => {
       const trimmedPin = (pin || "").trim();
 
       // Look up in registry by ID or by Name
-      const foundEntry = Object.values(HEALTH_REGISTRY_DATABASE).find((record) => {
-        return (
-          record.id.toLowerCase() === trimmedId ||
-          record.name.toLowerCase() === trimmedId ||
-          record.name.toLowerCase().includes(trimmedId)
-        );
-      });
+      const foundEntry = Object.values(HEALTH_REGISTRY_DATABASE).find(
+        (record) => {
+          return (
+            record.id.toLowerCase() === trimmedId ||
+            record.name.toLowerCase() === trimmedId ||
+            record.name.toLowerCase().includes(trimmedId)
+          );
+        },
+      );
 
       if (!foundEntry) {
         return {
@@ -379,4 +394,3 @@ export const useAuthStore = create<AuthState>((set, get) => {
 });
 
 export const useAuth = () => useAuthStore();
-
