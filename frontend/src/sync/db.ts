@@ -31,6 +31,38 @@ export interface SyncQueueItem {
   lastError?: string;
 }
 
+export interface DispensingLog {
+  id: string;
+  patientName: string;
+  age: number;
+  gender?: string;
+  village?: string;
+  reasonForMedicine: string;
+  vitals?: {
+    spo2?: number;
+    bp?: string;
+    pulse?: number;
+    tempF?: number;
+    weightKg?: number;
+  };
+  medicinesGiven?: string;
+  notes?: string;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export interface AshaMedicineStockItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  threshold: number;
+  batchNumber?: string;
+  expiryDate?: string;
+  lastUpdated: string;
+}
+
 export class CareContinuityDB extends Dexie {
   patients!: Table<Patient, string>;
   careEpisodes!: Table<CareEpisode, string>;
@@ -40,6 +72,8 @@ export class CareContinuityDB extends Dexie {
   followUpTasks!: Table<FollowUpTask, string>;
   backReferrals!: Table<BackReferral, string>;
   syncQueue!: Table<SyncQueueItem, number>;
+  dispensingLogs!: Table<DispensingLog, string>;
+  ashaMedicineStock!: Table<AshaMedicineStockItem, string>;
 
   constructor() {
     super("care-continuity-db");
@@ -64,10 +98,43 @@ export class CareContinuityDB extends Dexie {
       backReferrals: "id, referralId, recordedAt",
       syncQueue: "++id, entity, entityId, queuedAt",
     });
+    this.version(3).stores({
+      patients: "id, fullName, villageOrWard",
+      careEpisodes: "id, patientId, status, syncStatus",
+      triageAssessments: "id, careEpisodeId, clinicalRiskLevel, syncStatus",
+      referrals: "id, careEpisodeId, patientId, currentState, syncStatus",
+      referralTransitions: "id, referralId, toState, changedAt",
+      followUpTasks: "id, careEpisodeId, referralId, dueAt, status",
+      backReferrals: "id, referralId, recordedAt",
+      syncQueue: "++id, entity, entityId, queuedAt",
+      dispensingLogs: "id, patientName, recordedAt",
+      ashaMedicineStock: "id, name, category",
+    });
+    this.version(4).stores({
+      patients: "id, fullName, villageOrWard, deletedAt",
+      careEpisodes: "id, patientId, status, syncStatus, deletedAt",
+      triageAssessments: "id, careEpisodeId, clinicalRiskLevel, syncStatus",
+      referrals: "id, careEpisodeId, patientId, currentState, syncStatus, deletedAt",
+      referralTransitions: "id, referralId, toState, changedAt",
+      followUpTasks: "id, careEpisodeId, referralId, dueAt, status",
+      backReferrals: "id, referralId, recordedAt",
+      syncQueue: "++id, entity, entityId, queuedAt",
+      dispensingLogs: "id, patientName, recordedAt",
+      ashaMedicineStock: "id, name, category",
+    });
   }
 }
 
 export const db = new CareContinuityDB();
+
+export async function loadCachedUnifiedReferrals(): Promise<Referral[]> {
+  try {
+    return await db.referrals.toArray();
+  } catch (err) {
+    console.warn("Could not load cached referrals from Dexie:", err);
+    return [];
+  }
+}
 
 /**
  * Every local write goes through this helper so nothing forgets to

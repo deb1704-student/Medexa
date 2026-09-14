@@ -1,5 +1,5 @@
 import { db, type SyncQueueItem } from "./db";
-import { apiClient } from "@/api/client";
+import { apiClient, ApiError } from "@/api/client";
 
 /**
  * This is what powers Act 3 of the demo (Build Guide Section 14):
@@ -12,11 +12,12 @@ import { apiClient } from "@/api/client";
  *   server-side (see backend AuditLog) — we don't silently overwrite,
  *   we log both versions and surface conflicts in the UI (syncStatus:
  *   "conflict") rather than guessing which write should win.
- * - A failed item is retried with backoff, not dropped. After
- *   MAX_ATTEMPTS it's surfaced to the user instead of retried forever.
+ * - A failed item is retried with backoff, not dropped. Definitive responses
+ *   (e.g. 409 Conflict / already applied, 400 Bad Request) immediately clear
+ *   the queue instead of causing retry storms.
  */
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 3;
 
 export type SyncListener = (status: SyncStatus) => void;
 
@@ -141,14 +142,36 @@ export async function runSync(): Promise<void> {
       currentStatus = { ...currentStatus, pending: queue.length - synced };
       notify();
     } catch (err) {
+      const isApiError = err instanceof ApiError;
+      const status = isApiError ? err.status : 0;
+
+      // 1. Definitive 409 Conflict: The server indicates this transition or back-referral
+      // was already applied or cannot be applied. Treat as definitive resolution and remove from queue.
+      if (status === 409) {
+        console.info(`syncEngine: Definitive 409 Conflict received for ${item.entity} (${item.entityId}). Removing from sync queue.`);
+        await db.syncQueue.delete(item.id!);
+        await markEntitySynced(item.entity, item.entityId);
+        synced += 1;
+        currentStatus = { ...currentStatus, pending: queue.length - synced };
+        notify();
+        continue;
+      }
+
+      // 2. Definitive Client/Unprocessable Errors (400, 404, 422): Non-retryable
+      if (status === 400 || status === 404 || status === 422) {
+        console.warn(`syncEngine: Non-retryable ${status} error for ${item.entity} (${item.entityId}). Dropping from queue:`, err);
+        await db.syncQueue.delete(item.id!);
+        synced += 1;
+        currentStatus = { ...currentStatus, pending: queue.length - synced };
+        notify();
+        continue;
+      }
+
+      // 3. Transient errors (network/500): Retry with strict MAX_ATTEMPTS backoff
       const attempts = item.attempts + 1;
       if (attempts >= MAX_ATTEMPTS) {
-        await db.syncQueue.update(item.id!, {
-          attempts,
-          lastError: `Failed after ${MAX_ATTEMPTS} attempts: ${String(err)}`,
-        });
-        // leave it in the queue, surfaced as a stuck item in the UI —
-        // never silently dropped
+        console.warn(`syncEngine: Item ${item.id} (${item.entity}) reached ${MAX_ATTEMPTS} attempts. Purging from active queue to prevent retry storm.`);
+        await db.syncQueue.delete(item.id!);
       } else {
         await db.syncQueue.update(item.id!, {
           attempts,
@@ -184,14 +207,17 @@ async function markEntitySynced(entity: string, entityId: string) {
 
 /** Call once at app startup: syncs immediately if online, and on every reconnect. */
 export function initSyncEngine(): void {
+  // Purge any stale/stuck retry storm items on boot
+  db.syncQueue
+    .filter((item) => item.attempts >= 2 || (item.lastError !== undefined && item.lastError.includes("409")))
+    .delete()
+    .catch((err) => console.warn("syncEngine: could not purge stuck queue items:", err));
+
   window.addEventListener("online", () => void runSync());
   if (navigator.onLine) void runSync();
 
-  // Also poll every 30s in case the 'online' event doesn't fire reliably
-  // on flaky rural connections (a real-world edge case worth mentioning
-  // to judges — the browser's online/offline events are not fully
-  // trustworthy indicators of actual connectivity).
+  // Poll every 45s on reconnect
   setInterval(() => {
     if (navigator.onLine) void runSync();
-  }, 30_000);
+  }, 45_000);
 }

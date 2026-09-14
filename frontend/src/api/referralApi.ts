@@ -8,6 +8,7 @@ import type {
   ReferralStateT,
 } from "@/models/careEpisode";
 import type { UnifiedReferral } from "@/sync/referralStore";
+import { HEALTH_REGISTRY_DATABASE } from "@/auth/auth";
 
 export interface BackendStateTransition {
   id: string;
@@ -239,8 +240,16 @@ export function mapBackendToUnified(r: BackendReferralOut): UnifiedReferral {
       ? "DISTRICT_OFFICE"
       : "BLOCK_OFFICE";
 
-  const fromFacilityName = KNOWN_FACILITIES[r.from_facility_id] || r.from_facility_id || "Sub-Centre";
-  const toFacilityName = KNOWN_FACILITIES[r.to_facility_id] || r.to_facility_id || "Block PHC";
+  const knownWorker = r.created_by ? HEALTH_REGISTRY_DATABASE[r.created_by] : null;
+  const workerPrefix = knownWorker
+    ? `${knownWorker.name} (${knownWorker.id})`
+    : (r.created_by && r.created_by.toUpperCase().includes("ASHA") ? r.created_by : null);
+
+  const fromFacilityName = KNOWN_FACILITIES[r.from_facility_id] || r.from_facility_name || r.from_facility_id || "Sub-Centre";
+  const toFacilityName = KNOWN_FACILITIES[r.to_facility_id] || r.to_facility_name || r.to_facility_id || "Block PHC";
+  const fromFacilityOrWorker = workerPrefix
+    ? `${workerPrefix} — ${fromFacilityName}`
+    : (r.from_facility_name || fromFacilityName);
 
   const formattedDate = r.created_at
     ? new Date(r.created_at).toLocaleDateString("en-IN", {
@@ -267,7 +276,7 @@ export function mapBackendToUnified(r: BackendReferralOut): UnifiedReferral {
     targetLevel,
     fromFacilityId: r.from_facility_id,
     toFacilityId: r.to_facility_id,
-    fromFacilityOrWorker: r.from_facility_name || fromFacilityName,
+    fromFacilityOrWorker,
     toFacility: r.to_facility_name || toFacilityName,
     category: r.reason || "General Referral",
     priority: r.priority === "CRITICAL" ? "Emergency" : r.priority === "HIGH" ? "High" : "Normal",
@@ -278,6 +287,7 @@ export function mapBackendToUnified(r: BackendReferralOut): UnifiedReferral {
     lastAction,
     clinicalNotes: r.reason,
     escortTransport: isEmergency ? "Emergency Ambulance" : "Accompanied by ASHA",
+    createdAt: r.created_at,
   };
 }
 
@@ -308,15 +318,33 @@ export async function ensurePatientAndEpisode(data: {
   patientId: string; patientName: string; age: number; sex: "male" | "female" | "other";
   villageOrWard: string; phone?: string; careEpisodeId: string; createdBy: string;
 }): Promise<void> {
-  await apiClient.post("/patients", {
-    id: data.patientId, full_name: data.patientName, age: data.age, sex: data.sex,
-    village_or_ward: data.villageOrWard, phone: data.phone ?? null,
-    chronic_conditions: [], created_at: new Date().toISOString(),
-  });
-  await apiClient.post("/care-episodes", {
-    id: data.careEpisodeId, patient_id: data.patientId, status: "open",
-    opened_at: new Date().toISOString(),
-  });
+  const now = new Date().toISOString();
+  // 1. Mirror in local Dexie cache
+  const localPatient: Patient = {
+    id: data.patientId, fullName: data.patientName, age: data.age, sex: data.sex,
+    villageOrWard: data.villageOrWard, phone: data.phone, chronicConditions: [], createdAt: now,
+  };
+  const localEpisode: CareEpisode = {
+    id: data.careEpisodeId, patientId: data.patientId, status: "open", openedAt: now,
+    followUps: [], syncStatus: "pending",
+  };
+  await writeAndQueue(db.patients, "patient", localPatient).catch(() => {});
+  await writeAndQueue(db.careEpisodes, "careEpisode", localEpisode).catch(() => {});
+
+  // 2. Post to backend
+  try {
+    await apiClient.post("/patients", {
+      id: data.patientId, full_name: data.patientName, age: data.age, sex: data.sex,
+      village_or_ward: data.villageOrWard, phone: data.phone ?? null,
+      chronic_conditions: [], created_at: now,
+    });
+    await apiClient.post("/care-episodes", {
+      id: data.careEpisodeId, patient_id: data.patientId, status: "open",
+      opened_at: now,
+    });
+  } catch (err) {
+    console.warn("Backend ensurePatientAndEpisode offline/deferred:", err);
+  }
 }
 
 export async function queueReferralOfflineFirst(data: {
@@ -386,7 +414,7 @@ export const referralApi = {
   },
 
   /**
-   * Create a referral on the real backend.
+   * Create a referral on the real backend and mirror in Dexie cache.
    */
   createReferral: async (data: {
     id?: string;
@@ -408,6 +436,25 @@ export const referralApi = {
     const createdBy = data.createdBy || "demo-asha-001";
     const currentState = data.currentState || "SENT";
 
+    // 1. Mirror into Dexie cache
+    const localReferral: Referral = {
+      id,
+      careEpisodeId,
+      patientId,
+      fromFacilityId,
+      toFacilityId,
+      currentState,
+      reason: data.reason,
+      priority: data.priority,
+      createdAt: nowIso,
+      createdBy,
+      history: [],
+      rescueActions: [],
+      syncStatus: "pending",
+    };
+    await writeAndQueue(db.referrals, "referral", localReferral).catch(() => {});
+
+    // 2. Post to backend API
     const payload: BackendReferralCreate = {
       id,
       care_episode_id: careEpisodeId,
@@ -422,8 +469,27 @@ export const referralApi = {
       sync_status: "synced",
     };
 
-    const raw = await apiClient.post<BackendReferralOut>("/referrals", payload);
-    return mapBackendToUnified(raw);
+    try {
+      const raw = await apiClient.post<BackendReferralOut>("/referrals", payload);
+      return mapBackendToUnified(raw);
+    } catch (err) {
+      console.warn("createReferral backend call deferred/failed, returning mapped local referral:", err);
+      return mapBackendToUnified({
+        id,
+        care_episode_id: careEpisodeId,
+        patient_id: patientId,
+        from_facility_id: fromFacilityId,
+        to_facility_id: toFacilityId,
+        current_state: currentState,
+        reason: data.reason,
+        priority: data.priority,
+        created_at: nowIso,
+        created_by: createdBy,
+        sync_status: "pending",
+        transitions: [],
+        rescue_actions: [],
+      });
+    }
   },
 
   /**
@@ -479,6 +545,35 @@ export const referralApi = {
     return await apiClient.post<BackendBackReferralOut>("/referrals/back-referral", payload);
   },
 
+  /**
+   * Complete a referral and issue the authoritative back-referral to ASHA.
+   * Creates the back-referral, generates the follow-up task, and transitions the state machine to CLOSED.
+   */
+  completeReferralWithBackReferral: async (data: {
+    referralId: string;
+    outcome?: string;
+    treatment?: string;
+    medication?: string[];
+    followUpDate?: string;
+    warningSigns?: string[];
+    instructions?: string;
+    recordedBy?: string;
+  }): Promise<{ backReferral: BackendBackReferralOut; referral?: UnifiedReferral }> => {
+    const outcome = data.outcome || "Patient stabilized and discharged";
+    const backReferral = await referralApi.createBackReferral({
+      ...data,
+      outcome,
+    });
+
+    try {
+      const updated = await referralApi.transitionReferral(data.referralId, "CLOSED", outcome);
+      return { backReferral, referral: updated };
+    } catch {
+      // Backend create_back_referral automatically sets current_state = CLOSED
+      return { backReferral };
+    }
+  },
+
   /** List canonical facilities from the backend reference database. */
   listFacilities: async (district?: string): Promise<FacilityOut[]> => {
     const qs = district ? `?district=${encodeURIComponent(district)}` : "";
@@ -509,5 +604,24 @@ export const referralApi = {
 
   completeFollowUp: async (taskId: string): Promise<FollowUpTaskOut> => {
     return await apiClient.patch<FollowUpTaskOut>(`/continuity/follow-ups/${taskId}?status=completed`);
+  },
+
+  /**
+   * Admin-only soft delete for completed referrals past retention window.
+   */
+  deleteReferral: async (referralId: string, force = false): Promise<{ success: boolean; id: string }> => {
+    const qs = force ? "?force=true" : "";
+    const res = await apiClient.delete<{ success: boolean; id: string }>(`/referrals/${referralId}${qs}`);
+    await db.referrals.delete(referralId).catch(() => {});
+    return res;
+  },
+
+  /**
+   * Admin-only soft delete for patients.
+   */
+  deletePatient: async (patientId: string): Promise<{ success: boolean; id: string }> => {
+    const res = await apiClient.delete<{ success: boolean; id: string }>(`/patients/${patientId}`);
+    await db.patients.delete(patientId).catch(() => {});
+    return res;
   },
 };

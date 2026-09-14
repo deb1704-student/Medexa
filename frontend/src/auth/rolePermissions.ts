@@ -4,12 +4,14 @@ export const ROLE_DASHBOARDS: Record<Role, string> = {
   ASHA: "/dashboard/referrals/asha",
   BLOCK: "/dashboard/referrals/block-office",
   DISTRICT: "/dashboard",
+  ADMIN: "/dashboard",
 };
 
 export const ROLE_PORTAL_LABELS: Record<Role, string> = {
   ASHA: "ASHA / Village Worker Portal",
   BLOCK: "Block Health Office Portal",
   DISTRICT: "District Office Portal",
+  ADMIN: "System Administration Portal",
 };
 
 /**

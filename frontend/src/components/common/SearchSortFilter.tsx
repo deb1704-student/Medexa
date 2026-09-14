@@ -15,6 +15,7 @@ export interface FilterState {
   stage: string; // "ALL" | stage name
   category: string; // "ALL" | category name
   viewMode: "cards" | "table";
+  timeRange?: "7days" | "all";
 }
 
 interface SearchSortFilterProps {
@@ -55,7 +56,8 @@ export const SearchSortFilter: React.FC<SearchSortFilterProps> = ({
     filters.risk !== "ALL" ||
     filters.stage !== "ALL" ||
     filters.category !== "ALL" ||
-    filters.search.trim() !== "";
+    filters.search.trim() !== "" ||
+    filters.timeRange === "all";
 
   const resetFilters = () => {
     onChange({
@@ -65,6 +67,7 @@ export const SearchSortFilter: React.FC<SearchSortFilterProps> = ({
       risk: "ALL",
       stage: "ALL",
       category: "ALL",
+      timeRange: "7days",
     });
   };
 
@@ -96,8 +99,39 @@ export const SearchSortFilter: React.FC<SearchSortFilterProps> = ({
           )}
         </div>
 
-        {/* Sort Select */}
-        <div className="flex items-center gap-2">
+        {/* Sort & Scope Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Time Range Toggle: Last 7 Days vs All Time */}
+          <div className="inline-flex rounded-xl border border-outline-variant bg-surface-container p-0.5">
+            <button
+              type="button"
+              onClick={() => onChange({ ...filters, timeRange: "7days" })}
+              className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition ${
+                (filters.timeRange ?? "7days") === "7days"
+                  ? "bg-surface text-primary shadow-xs font-bold"
+                  : "text-on-surface-variant hover:text-on-surface"
+              }`}
+              title="Show cases created in the last 7 days"
+            >
+              <span className="material-symbols-outlined text-[15px]">schedule</span>
+              <span className="hidden sm:inline">Last 7 Days</span>
+              <span className="sm:hidden">7 Days</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ ...filters, timeRange: "all" })}
+              className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition ${
+                filters.timeRange === "all"
+                  ? "bg-surface text-primary shadow-xs font-bold"
+                  : "text-on-surface-variant hover:text-on-surface"
+              }`}
+              title="Show all cases across all time"
+            >
+              <span className="material-symbols-outlined text-[15px]">inventory_2</span>
+              <span className="hidden sm:inline">All Time</span>
+              <span className="sm:hidden">All</span>
+            </button>
+          </div>
           <div className="relative min-w-[150px]">
             <select
               value={filters.sortBy}

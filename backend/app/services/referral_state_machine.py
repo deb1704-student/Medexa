@@ -23,17 +23,23 @@ LEGAL_TRANSITIONS: dict[ReferralState, set[ReferralState]] = {
         ReferralState.REJECTED,
         ReferralState.EXPIRED,
         ReferralState.EMERGENCY_ESCALATED,
+        ReferralState.REFERRED_BACK,
+        ReferralState.CLOSED,
     },
     ReferralState.RECEIVED: {
         ReferralState.ACCEPTED,
         ReferralState.REJECTED,
         ReferralState.EMERGENCY_ESCALATED,
+        ReferralState.REFERRED_BACK,
+        ReferralState.CLOSED,
     },
     ReferralState.ACCEPTED: {
         ReferralState.APPOINTMENT_QUEUED,
         ReferralState.CONSULTED,
         ReferralState.PATIENT_NO_SHOW,
         ReferralState.EMERGENCY_ESCALATED,
+        ReferralState.REFERRED_BACK,
+        ReferralState.CLOSED,
     },
     ReferralState.APPOINTMENT_QUEUED: {
         ReferralState.CONSULTED,

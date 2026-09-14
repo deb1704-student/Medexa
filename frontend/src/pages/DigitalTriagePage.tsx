@@ -21,6 +21,7 @@ export interface DigitalTriagePageProps {
     name: string;
     ageGender?: string;
   };
+  onPatientData?: (name: string, age: number, sex: string) => void;
   onComplete?: (riskLevel: ClinicalRiskLevelT, assessment?: TriageAssessment) => void;
   onBackToReferral?: () => void;
 }
@@ -30,6 +31,7 @@ export function DigitalTriagePage({
   careEpisodeId: propEpisodeId,
   workerId: propWorkerId,
   patientData,
+  onPatientData,
   onComplete,
   onBackToReferral,
 }: DigitalTriagePageProps = {}) {
@@ -130,15 +132,34 @@ export function DigitalTriagePage({
             </div>
           </div>
 
-          <TriageForm
-            careEpisodeId={episodeId}
-            workerId={workerId}
-            onSubmitted={(riskLevel, assessment) => {
-              if (onComplete) {
-                onComplete(riskLevel, assessment);
-              }
-            }}
-          />
+          {/* Embedded Triage Form with Patient Identity */}
+          {(() => {
+            let initialAge: string | undefined = undefined;
+            let initialSex: string | undefined = undefined;
+            if (patientData?.ageGender) {
+              const match = patientData.ageGender.match(/^(\d+)/);
+              if (match) initialAge = match[1];
+              if (/female|\bF\b/i.test(patientData.ageGender)) initialSex = "female";
+              else if (/male|\bM\b/i.test(patientData.ageGender)) initialSex = "male";
+              else if (/other|\bO\b/i.test(patientData.ageGender)) initialSex = "other";
+            }
+            return (
+              <TriageForm
+                careEpisodeId={episodeId}
+                workerId={workerId}
+                initialPatientName={patientData?.name}
+                patientNameLocked={Boolean(patientData?.name)}
+                initialAge={initialAge}
+                initialSex={initialSex}
+                onPatientData={onPatientData}
+                onSubmitted={(riskLevel, assessment) => {
+                  if (onComplete) {
+                    onComplete(riskLevel, assessment);
+                  }
+                }}
+              />
+            );
+          })()}
         </div>
       </div>
     );
@@ -702,6 +723,11 @@ export function DigitalTriagePage({
             <TriageForm
               careEpisodeId={episodeId}
               workerId={workerId}
+              initialPatientName={patientName}
+              patientNameLocked={patientSubmitted}
+              initialAge={age}
+              initialSex={gender.toLowerCase().includes("female") ? "female" : gender.toLowerCase().includes("male") ? "male" : "other"}
+              onPatientData={onPatientData}
               onSubmitted={(riskLevel, assessment) => {
                 if (onComplete) {
                   onComplete(riskLevel, assessment);

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
 from app.core.database import Base
-from app.models.mixins import UUIDPrimaryKeyMixin, TimestampMixin
+from app.models.mixins import UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin
 from app.models.observation import SyncStatus
 from app.models.continuity import ReferralFailureReason
 
@@ -44,7 +44,7 @@ TERMINAL_STATES = {
 }
 
 
-class Referral(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+class Referral(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """FHIR resource: ServiceRequest (referral variant). This is the hero
     workflow — Build Guide Section 1: "our system doesn't just create a
     referral, it follows the referral until the patient's care episode

@@ -65,6 +65,7 @@ export interface PatientCase {
   referralFacility: string;
   doctorName?: string;
   notes: string;
+  createdAt?: string;
   timeline: PatientTimelineEvent[];
 }
 
@@ -649,6 +650,7 @@ export function mapUnifiedToPatientCase(r: UnifiedReferral): PatientCase {
     referralFacility: r.toFacility || "Block PHC",
     doctorName: r.assignedDoctor || "On-duty Medical Officer",
     notes: r.clinicalNotes || "Clinical evaluation requested",
+    createdAt: r.createdAt || (r.referralDate ? new Date(r.referralDate).toISOString() : undefined),
     timeline: [
       {
         id: `EV-${r.id}-1`,

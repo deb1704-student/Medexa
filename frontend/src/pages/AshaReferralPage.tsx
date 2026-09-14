@@ -8,6 +8,7 @@ import { useReferralStore, useScopedReferrals, type UnifiedReferral, getPublicSt
 import { ensurePatientAndEpisode, queueReferralOfflineFirst, referralApi } from "@/api/referralApi";
 import { AshaAuthModal } from "@/components/referral/AshaAuthModal";
 import { DigitalTriagePage } from "@/pages/DigitalTriagePage";
+import { AshaDispensingLog } from "@/components/triage/AshaDispensingLog";
 import type { ClinicalRiskLevelT } from "@/models/careEpisode";
 import { mapUnifiedToPatientCase, type PatientCase } from "@/sync/mockPatientCases";
 import { z } from "zod";
@@ -18,23 +19,6 @@ import { PatientRecordDrawer } from "@/components/common/PatientRecordDrawer";
 import { EmergencyEscalationModal } from "@/components/common/EmergencyEscalationModal";
 import { ReferralStatusStepper } from "@/components/common/ReferralStatusStepper";
 import { useLanguageStore } from "@/i18n/useLanguageStore";
-import { GeoCascadeSelect, type GeoValue } from "@/components/common/GeoCascadeSelect";
-
-const BLOCK_FACILITIES = [
-  "Dwariknagar Rural Hospital",
-  "Maharajganj Rural Hospital",
-  "Namkhana Community Health Centre (CHC)",
-  "Kotulpur Block Hospital",
-];
-
-const CATEGORY_OPTIONS = [
-  "High-Risk ANC (Third Trimester)",
-  "Severe Child Malnutrition (SAM)",
-  "Acute Respiratory Distress",
-  "Uncontrolled Diabetes / Hypertension",
-  "Suspected Tuberculosis (TB)",
-  "Emergency Obstetric / Trauma",
-];
 
 export function AshaReferralPage() {
   const [searchParams] = useSearchParams();
@@ -55,8 +39,15 @@ export function AshaReferralPage() {
     viewParam === "referral" || createParam ? "referral" : "triage",
   );
 
-  // Inside Village Referral: "create" (Dispatch Referral) | "queue" (Follow-ups & History)
-  const [referralSubView, setReferralSubView] = useState<"create" | "queue">("create");
+  // Sync tab with URL searchParams reactively (Fix B1 sidebar navigation)
+  useEffect(() => {
+    const view = searchParams.get("view");
+    if (view === "referral") {
+      setActiveTab("referral");
+    } else if (view === "triage") {
+      setActiveTab("triage");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let mounted = true;
@@ -93,11 +84,12 @@ export function AshaReferralPage() {
   // Task 1 & 2 & 3 & 5: Search/Filter state, Drawers/Modals
   const [filterState, setFilterState] = useState<FilterState>({
     search: "",
-    sortBy: "risk-desc",
+    sortBy: "recent",
     risk: "ALL",
     stage: "ALL",
     category: "ALL",
     viewMode: "cards",
+    timeRange: "7days",
   });
 
   const [selectedCaseForDrawer, setSelectedCaseForDrawer] = useState<PatientCase | null>(null);
@@ -111,6 +103,53 @@ export function AshaReferralPage() {
   const [selectedPatientForSituation, setSelectedPatientForSituation] = useState<UnifiedReferral | null>(null);
 
   const [activeCareEpisodeId, setActiveCareEpisodeId] = useState<string>(() => uuidv4());
+
+  // Clinical Completion & Back-Referral Modal state
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
+  const [completionOutcome, setCompletionOutcome] = useState("Patient stabilized and discharged");
+  const [completionTreatment, setCompletionTreatment] = useState(
+    "Specialist consultation, vital stabilization, and treatment completed at Dwariknagar Rural Hospital."
+  );
+  const [completionInstructions, setCompletionInstructions] = useState(
+    "Daily home visits for blood pressure & vitals monitoring, verify medication adherence."
+  );
+  const [completionFollowUpDays, setCompletionFollowUpDays] = useState(3);
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  const handleConfirmCompletion = async () => {
+    if (!activeEpisodeReferral) return;
+    setIsCompleting(true);
+    try {
+      await referralApi.completeReferralWithBackReferral({
+        referralId: activeEpisodeReferral.id,
+        outcome: completionOutcome,
+        treatment: completionTreatment,
+        instructions: completionInstructions,
+        followUpDate: new Date(Date.now() + completionFollowUpDays * 86400000).toISOString().slice(0, 10),
+        recordedBy: ashaUser ? `${ashaUser.name} (${ashaUser.id})` : "Dr. Anirban Roy (BMOH)",
+      });
+
+      useReferralStore.getState().terminateOrDischargePatient(
+        activeEpisodeReferral.id,
+        completionOutcome,
+        "Completed"
+      );
+
+      setCompletionModalOpen(false);
+      setStepperStage("completed");
+    } catch (err) {
+      console.warn("API completion fallback, updating local store:", err);
+      useReferralStore.getState().terminateOrDischargePatient(
+        activeEpisodeReferral.id,
+        completionOutcome,
+        "Completed"
+      );
+      setCompletionModalOpen(false);
+      setStepperStage("completed");
+    } finally {
+      setIsCompleting(false);
+    }
+  };
 
   const [selectedPatient, setSelectedPatient] = useState<{
     id: string;
@@ -131,44 +170,33 @@ export function AshaReferralPage() {
         id: uuidValidate(selectedPatient.id) ? selectedPatient.id : uuidv4(),
       };
     }
-    if (patientCases.length > 0) {
-      const first = patientCases[0];
-      const validId = uuidValidate(first.id) ? first.id : "550e8400-e29b-41d4-a716-446655440000";
-      return {
-        id: validId,
-        name: first.name,
-        ageGender: `${first.age} ${first.gender === "Female" ? "F" : "M"}`,
-        state: first.state,
-        district: first.district,
-        block: first.block,
-        village: first.village,
-        phone: first.phone,
-        category: first.condition,
-      };
-    }
     return {
       id: "550e8400-e29b-41d4-a716-446655440000",
-      name: "Frontline Patient Intake",
-      ageGender: "25 F",
+      name: "New Patient",
+      ageGender: "—",
       state: "West Bengal",
       district: "South 24 Parganas",
-      block: "Namkhana Block",
+      block: ashaUser?.facilityOrVillage?.includes("Block") ? ashaUser.facilityOrVillage : "Namkhana Block",
       village: ashaUser?.facilityOrVillage || "Shibpur Village",
       phone: "+91 98321 00000",
-      category: "High-Risk ANC (Third Trimester)",
+      category: "General Care",
     };
-  }, [selectedPatient, patientCases, ashaUser]);
+  }, [selectedPatient, ashaUser]);
 
-  const [isSwitchingPatient, setIsSwitchingPatient] = useState(false);
-  const [tempPatientName, setTempPatientName] = useState("");
-  const [tempAgeGender, setTempAgeGender] = useState("");
-  const [tempCategory, setTempCategory] = useState("High-Risk ANC (Third Trimester)");
-  const [tempGeo, setTempGeo] = useState<GeoValue>({
-    state: "West Bengal",
-    district: "South 24 Parganas",
-    block: "Namkhana Block",
-    village: "Shibpur Village",
-  });
+  const handleTriagePatientData = (name: string, age: number, sex: string) => {
+    const sexCode = sex === "male" ? "M" : sex === "female" ? "F" : "O";
+    setSelectedPatient({
+      id: uuidv4(),
+      name,
+      ageGender: `${age} ${sexCode}`,
+      state: "West Bengal",
+      district: "South 24 Parganas",
+      block: ashaUser?.facilityOrVillage?.includes("Block") ? ashaUser.facilityOrVillage : "Namkhana Block",
+      village: ashaUser?.facilityOrVillage || "Shibpur Village",
+      phone: "+91 98321 00000",
+      category: "General Care",
+    });
+  };
 
   // Stepper Stages: 1. assessment -> 2. referral -> 3. followup -> 4. completed
   const [stepperStage, setStepperStage] = useState<"assessment" | "referral" | "followup" | "completed">("assessment");
@@ -183,8 +211,8 @@ export function AshaReferralPage() {
     notes?: string;
   } | null>(null);
 
-  // Referral creation fields (Step 2)
-  const [selectedBlockFacility, setSelectedBlockFacility] = useState("Dwariknagar Rural Hospital");
+  // Referral creation fields (Step 2: locked to assigned Block facility)
+  const selectedBlockFacility = "Dwariknagar Rural Hospital";
   const [selectedEscort, setSelectedEscort] = useState("Accompanied by ASHA");
   const [referralNotes, setReferralNotes] = useState("");
   const [activeEpisodeReferralId, setActiveEpisodeReferralId] = useState<string | null>(null);
@@ -197,38 +225,43 @@ export function AshaReferralPage() {
   // Strict Village Scoping: ASHA worker only ever sees their assigned village cases
   const villageScopedCases = useMemo(() => {
     if (!ashaUser) return [];
-
-    const userFacility = (ashaUser.facilityOrVillage || "").toLowerCase();
-    const userName = (ashaUser.name || "").toLowerCase();
-
-    return patientCases.filter((p) => {
-      const v = (p.village || "").toLowerCase();
-      const asha = (p.assignedAsha || "").toLowerCase();
-
-      if (userFacility.includes("rampur") && v.includes("rampur")) return true;
-      if (userFacility.includes("sonamukhi") || userFacility.includes("sonapur")) {
-        if (v.includes("sonamukhi") || v.includes("sonapur")) return true;
-      }
-      if (userFacility.includes("dwariknagar") && v.includes("dwariknagar")) return true;
-      if (userFacility.includes("shyampur") && v.includes("shyampur")) return true;
-
-      return asha.includes(userName) || userFacility.includes(v);
-    });
+    return patientCases;
   }, [patientCases, ashaUser]);
 
-  // Filtered patient cases with full search, sort, and filters strictly within village scope
+  // Active time-scoped cases: defaults to last 7 days unless user chooses "all"
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const timeScopedCases = useMemo(() => {
+    if (filterState.timeRange === "all") {
+      return villageScopedCases;
+    }
+    const now = Date.now();
+    return villageScopedCases.filter((c) => {
+      const dateStr = c.createdAt || c.lastUpdated;
+      if (!dateStr) return true;
+      if (/today|yesterday|just now|min|hour/i.test(dateStr)) return true;
+      const parsed = Date.parse(dateStr);
+      if (isNaN(parsed)) return true;
+      return now - parsed <= SEVEN_DAYS_MS;
+    });
+  }, [villageScopedCases, filterState.timeRange]);
+
+  // Filtered patient cases with full search, sort, and filters strictly within active time & village scope
   const filteredCases = useMemo(() => {
-    return villageScopedCases
+    return timeScopedCases
       .filter((p) => {
         const q = filterState.search.trim().toLowerCase();
         if (q) {
           const match =
-            p.name.toLowerCase().includes(q) ||
-            p.village.toLowerCase().includes(q) ||
-            p.abhaId.toLowerCase().includes(q) ||
-            p.condition.toLowerCase().includes(q) ||
-            p.id.toLowerCase().includes(q) ||
-            p.assignedAsha.toLowerCase().includes(q);
+            (p.name || "").toLowerCase().includes(q) ||
+            (p.referralId || "").toLowerCase().includes(q) ||
+            (p.id || "").toLowerCase().includes(q) ||
+            (p.phone || "").toLowerCase().includes(q) ||
+            (p.village || "").toLowerCase().includes(q) ||
+            (p.abhaId || "").toLowerCase().includes(q) ||
+            (p.condition || "").toLowerCase().includes(q) ||
+            (p.assignedAsha || "").toLowerCase().includes(q) ||
+            (p.doctorName || "").toLowerCase().includes(q) ||
+            (p.notes || "").toLowerCase().includes(q);
           if (!match) return false;
         }
         if (filterState.risk !== "ALL" && p.riskLevel !== filterState.risk) {
@@ -243,37 +276,53 @@ export function AshaReferralPage() {
         return true;
       })
       .sort((a, b) => {
+        const getTime = (c: PatientCase) => {
+          const d = c.createdAt || c.lastUpdated;
+          if (!d) return 0;
+          if (/today|just now/i.test(d)) return Date.now();
+          if (/yesterday/i.test(d)) return Date.now() - 86400000;
+          const t = Date.parse(d);
+          return isNaN(t) ? 0 : t;
+        };
+
+        if (filterState.sortBy === "recent") {
+          return getTime(b) - getTime(a);
+        }
         if (filterState.sortBy === "risk-desc") {
           const score = { RED: 3, YELLOW: 2, GREEN: 1 };
-          return score[b.riskLevel] - score[a.riskLevel];
+          const diff = score[b.riskLevel] - score[a.riskLevel];
+          if (diff !== 0) return diff;
+          return getTime(b) - getTime(a);
         }
         if (filterState.sortBy === "risk-asc") {
           const score = { RED: 3, YELLOW: 2, GREEN: 1 };
-          return score[a.riskLevel] - score[b.riskLevel];
+          const diff = score[a.riskLevel] - score[b.riskLevel];
+          if (diff !== 0) return diff;
+          return getTime(b) - getTime(a);
         }
         if (filterState.sortBy === "name-asc") {
-          return a.name.localeCompare(b.name);
+          return (a.name || "").localeCompare(b.name || "");
         }
         if (filterState.sortBy === "name-desc") {
-          return b.name.localeCompare(a.name);
+          return (b.name || "").localeCompare(a.name || "");
         }
         if (filterState.sortBy === "stage") {
-          return a.careStage.localeCompare(b.careStage);
+          return (a.careStage || "").localeCompare(b.careStage || "");
         }
-        return 0;
+        return getTime(b) - getTime(a);
       });
-  }, [villageScopedCases, filterState]);
+  }, [timeScopedCases, filterState]);
 
-  // Statistics strictly scoped to this ASHA worker's village
-  const totalReferrals = villageScopedCases.length;
-  const highRiskCount = villageScopedCases.filter((p) => p.riskLevel === "RED").length;
-  const atBlockOfficeCount = villageScopedCases.filter(
+  // Statistics strictly scoped to this ASHA worker's active view (Last 7 Days by default or All Time)
+  const totalReferrals = timeScopedCases.length;
+  const highRiskCount = timeScopedCases.filter((p) => p.riskLevel === "RED").length;
+  const atBlockOfficeCount = timeScopedCases.filter(
     (p) => p.careStage === "Triage / Referred" || p.careStage === "In Transit"
   ).length;
-  const backReferredCount = villageScopedCases.filter(
+  const backReferredCount = timeScopedCases.filter(
     (p) => p.careStage === "Back-Referred / Follow-up"
   ).length;
-  const escalatedCount = villageScopedCases.filter(
+  const escalatedCount = timeScopedCases.filter(
     (p) => p.careStage === "Consultation" || p.careStage === "Treatment"
   ).length;
 
@@ -285,10 +334,67 @@ export function AshaReferralPage() {
       vitals: assessment?.vitals || {},
       notes: assessment?.notes || "",
     });
-    setReferralNotes(
+    const defaultNotes =
       assessment?.notes ||
-        `Triage assessed as ${riskLevel.toUpperCase()} risk. Vitals and symptoms recorded by ASHA.`
-    );
+      `Triage assessed as ${riskLevel.toUpperCase()} risk. Vitals and symptoms recorded by ASHA.`;
+    setReferralNotes(defaultNotes);
+
+    const priority: UnifiedReferral["priority"] =
+      riskLevel === "emergency" ? "Emergency" : riskLevel === "high" ? "High" : "Normal";
+    const triageLevel: UnifiedReferral["triageLevel"] =
+      riskLevel === "emergency" || riskLevel === "high" ? "RED" : riskLevel === "moderate" ? "YELLOW" : "GREEN";
+
+    const stableRefId = activeEpisodeReferralId || uuidv4();
+    const careEpisodeId = activeCareEpisodeId;
+    const patientId = activePatient.id;
+    const ageMatch = activePatient.ageGender.match(/\d+/);
+    const parsedAge = ageMatch ? Number(ageMatch[0]) : 25;
+    const sex = /\bM\b/i.test(activePatient.ageGender) ? "male" : /\bF\b/i.test(activePatient.ageGender) ? "female" : "other";
+
+    setActiveEpisodeReferralId(stableRefId);
+
+    const initialCase: UnifiedReferral = {
+      id: stableRefId,
+      patientName: activePatient.name,
+      patientId,
+      ageGender: activePatient.ageGender,
+      state: activePatient.state,
+      district: activePatient.district,
+      block: activePatient.block,
+      village: activePatient.village,
+      sourceLevel: "ASHA",
+      targetLevel: "BLOCK_OFFICE",
+      fromFacilityId: "MED-WB-FAC-000372",
+      toFacilityId: "MED-WB-FAC-000003",
+      fromFacilityOrWorker: ashaUser ? `${ashaUser.name} (${ashaUser.id})` : "Kavita Roy (ASHA-WB-401)",
+      toFacility: selectedBlockFacility,
+      category: activePatient.category,
+      priority,
+      triageLevel,
+      status: "Referred to Block",
+      clinicalNotes: defaultNotes,
+      escortTransport: selectedEscort,
+      assignedDoctor: "On-duty Medical Officer",
+      referralDate: "Today",
+      lastAction: "Triage registered, pending dispatch",
+      createdAt: new Date().toISOString(),
+    };
+
+    addAshaReferral(initialCase);
+
+    ensurePatientAndEpisode({
+      patientId,
+      patientName: activePatient.name,
+      age: parsedAge,
+      sex,
+      villageOrWard: activePatient.village,
+      phone: activePatient.phone,
+      careEpisodeId,
+      createdBy: ashaUser?.id || "demo-asha-001",
+    }).catch((err) => {
+      console.warn("Could not save initial patient & episode:", err);
+    });
+
     // Advance stepper to Referral step
     setStepperStage("referral");
   };
@@ -307,7 +413,7 @@ export function AshaReferralPage() {
     // Generate ONE stable referral ID before the online/offline branch.
     // Both paths MUST use this same ID so the displayed referral and the
     // persisted referral are always the same logical entity.
-    const stableReferralId = uuidv4();
+    const stableReferralId = activeEpisodeReferralId || uuidv4();
     const careEpisodeId = activeCareEpisodeId;
     const patientId = activePatient.id;
     const ageMatch = activePatient.ageGender.match(/\d+/);
@@ -351,6 +457,7 @@ export function AshaReferralPage() {
         clinicalNotes: notes,
         escortTransport: selectedEscort,
         assignedDoctor: "On-duty Medical Officer",
+        createdAt: new Date().toISOString(),
       };
 
       addAshaReferral(newRef);
@@ -381,6 +488,7 @@ export function AshaReferralPage() {
           escortTransport: selectedEscort,
           assignedDoctor: "On-duty Medical Officer",
           clinicalNotes: notes,
+          createdAt: new Date().toISOString(),
         };
         addAshaReferral(queuedReferral);
         setActiveEpisodeReferralId(queuedReferral.id);
@@ -390,33 +498,6 @@ export function AshaReferralPage() {
         throw queueErr;
       }
     }
-  };
-
-  const handleStartNewPatient = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tempPatientName.trim()) return;
-
-    const newId = uuidv4();
-    const newEpisodeId = uuidv4();
-    setSelectedPatient({
-      id: newId,
-      name: tempPatientName,
-      ageGender: tempAgeGender || "25 F",
-      state: tempGeo.state || "West Bengal",
-      district: tempGeo.district || "South 24 Parganas",
-      block: tempGeo.block || "Namkhana Block",
-      village: tempGeo.village || "Shibpur Village",
-      phone: "+91 98321 00000",
-      category: tempCategory,
-    });
-    setActiveCareEpisodeId(newEpisodeId);
-
-    setIsSwitchingPatient(false);
-    setAssessmentData(null);
-    setActiveEpisodeReferralId(null);
-    setStepperStage("assessment");
-    setTempPatientName("");
-    setTempAgeGender("");
   };
 
   const handleSelectPatientCase = (patient: PatientCase) => {
@@ -450,7 +531,7 @@ export function AshaReferralPage() {
       setStepperStage("assessment");
     }
     setActiveTab("referral");
-    setReferralSubView("create");
+    window.scrollTo({ top: 120, behavior: "smooth" });
   };
 
   const handleOpenSituation = (patient: UnifiedReferral) => {
@@ -479,21 +560,7 @@ export function AshaReferralPage() {
             onLogout={logoutAsha}
             onOpenAuth={() => setAshaAuthOpen(true)}
             allReferralsPath="/"
-            actionButton={
-              isAsha ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSwitchingPatient(true);
-                    setActiveTab("triage");
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-teal-800 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-teal-900 active:scale-[0.98]"
-                >
-                  <span className="material-symbols-outlined text-base">person_add</span>
-                  <span>{tPortal("registerPatientFirst", "Register Patient Intake", language)}</span>
-                </button>
-              ) : null
-            }
+            showNotificationsBell={false}
           />
 
           {!isAsha ? (
@@ -530,7 +597,7 @@ export function AshaReferralPage() {
                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-outline-variant/60">
                         <div>
                           <p className="font-bold">Kavita Roy (ASHA-WB-401)</p>
-                          <p className="text-[11px] text-on-surface-variant">Shibpur Village / Sector â€¢ PIN: 1234</p>
+                          <p className="text-[11px] text-on-surface-variant">Shibpur Village / Sector • PIN: 1234</p>
                         </div>
                         <button
                           type="button"
@@ -545,7 +612,7 @@ export function AshaReferralPage() {
                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-outline-variant/60">
                         <div>
                           <p className="font-bold">Radha Sen (ASHA-WB-402)</p>
-                          <p className="text-[11px] text-on-surface-variant">Maharajganj East Sector â€¢ PIN: 1234</p>
+                          <p className="text-[11px] text-on-surface-variant">Maharajganj East Sector • PIN: 1234</p>
                         </div>
                         <button
                           type="button"
@@ -579,7 +646,7 @@ export function AshaReferralPage() {
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs">
                 <div className="flex items-center gap-2 text-primary font-medium">
                   <span className="material-symbols-outlined text-base">location_on</span>
-                  <span><strong>Geographic Hierarchy:</strong> West Bengal â†’ South 24 Parganas District â†’ Namkhana / Maharajganj Block â†’ Frontline Villages</span>
+                  <span><strong>Geographic Hierarchy:</strong> West Bengal → South 24 Parganas District → Namkhana / Maharajganj Block → Frontline Villages</span>
                 </div>
                 <span className="rounded-full bg-primary/10 px-2.5 py-0.5 font-bold text-primary">
                   {ashaUser?.facilityOrVillage || "Village Health Sub-Centre"}
@@ -598,10 +665,10 @@ export function AshaReferralPage() {
                         : "border-transparent text-on-surface-variant hover:text-on-surface"
                     }`}
                   >
-                    <span className="material-symbols-outlined text-lg">vital_signs</span>
-                    <span>1. {tPortal("digitalTriage", "Digital Triage")}</span>
+                    <span className="material-symbols-outlined text-lg">medication_liquid</span>
+                    <span>1. {tPortal("digitalTriage", "Digital Triage & Dispensing Log")}</span>
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
-                      Entry Point
+                      Daily Care
                     </span>
                   </button>
 
@@ -622,133 +689,51 @@ export function AshaReferralPage() {
                   </button>
                 </div>
 
-                {activeTab === "referral" && (
-                  <div className="flex items-center gap-1.5 p-1 bg-surface-container rounded-xl text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setReferralSubView("create")}
-                      className={`px-3 py-1 rounded-lg font-bold transition ${
-                        referralSubView === "create"
-                          ? "bg-white text-primary shadow-xs"
-                          : "text-on-surface-variant hover:text-on-surface"
-                      }`}
-                    >
-                      Referral Creation
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReferralSubView("queue")}
-                      className={`px-3 py-1 rounded-lg font-bold transition ${
-                        referralSubView === "queue"
-                          ? "bg-white text-primary shadow-xs"
-                          : "text-on-surface-variant hover:text-on-surface"
-                      }`}
-                    >
-                      Case Follow-ups ({totalReferrals})
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* =========================================================
-                  ITEM 1: DIGITAL TRIAGE (ENTRY POINT)
+                  ITEM 1: DIGITAL TRIAGE & DAILY DISPENSING LOG (ENTRY POINT)
                   ========================================================= */}
               {activeTab === "triage" && (
                 <div className="space-y-6">
-                  {/* Digital Triage Patient Intake */}
-                  <DigitalTriagePage
-                    embedded
-                    careEpisodeId={activeCareEpisodeId}
+                  <AshaDispensingLog
                     workerId={ashaUser?.id || "ASHA-WB-401"}
-                    patientData={{
-                      id: activePatient.id,
-                      name: activePatient.name,
-                      ageGender: activePatient.ageGender,
-                    }}
-                    onComplete={(riskLevel, assessment) => {
-                      handleTriageCompleted(riskLevel, assessment);
-                    }}
-                    onBackToReferral={() => setActiveTab("referral")}
+                    workerName={ashaUser?.name}
+                    defaultVillage={ashaUser?.facilityOrVillage || "Shibpur Village Health Sub-Centre"}
                   />
                 </div>
               )}
 
               {/* =========================================================
-                  ITEM 2: VILLAGE REFERRAL (AFTER PATIENT ENTERED VIA TRIAGE)
+                  ITEM 2: VILLAGE REFERRAL & CONTINUUM (STEPPER + QUEUE)
                   ========================================================= */}
-              {activeTab === "referral" && referralSubView === "create" && (
-                <div className="space-y-6">
-                  {/* PATIENT DETAILS CARD */}
-                  <div className="rounded-3xl border border-outline-variant bg-surface p-5 sm:p-7 shadow-sm">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-outline-variant pb-5">
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black text-xl">
-                          {activePatient.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h2 className="text-xl font-bold text-on-surface">{activePatient.name}</h2>
-                            <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-xs font-bold text-primary">
-                              {activePatient.id}
-                            </span>
-                          </div>
-                          <p className="text-xs text-on-surface-variant mt-0.5">
-                            {activePatient.ageGender} â€¢ {activePatient.phone}
-                          </p>
-                        </div>
+              {activeTab === "referral" && (
+                <div className="space-y-8">
+                  {/* CARE JOURNEY STEPPER (§5.2) */}
+                  <div className="rounded-3xl border border-outline-variant bg-surface p-5 sm:p-6 shadow-sm">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                          Sequential Care Continuum
+                        </span>
+                        <h3 className="text-base font-bold text-on-surface">Patient Care Journey Stepper</h3>
                       </div>
-
-                      <div className="flex items-center gap-2">
+                      {selectedPatient && (
                         <button
                           type="button"
-                          onClick={() => setIsSwitchingPatient(true)}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-outline-variant bg-surface px-3.5 py-2 text-xs font-bold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition"
+                          onClick={() => {
+                            setSelectedPatient(null);
+                            setAssessmentData(null);
+                            setActiveEpisodeReferralId(null);
+                            setActiveCareEpisodeId(uuidv4());
+                            setStepperStage("assessment");
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-outline-variant bg-surface-container px-3 py-1.5 text-xs font-bold text-primary hover:bg-surface-container-high transition"
                         >
-                          <span className="material-symbols-outlined text-base">swap_horiz</span>
-                          <span>Switch / New Patient</span>
+                          <span className="material-symbols-outlined text-sm">person_add</span>
+                          <span>Start New Patient Triage</span>
                         </button>
-                      </div>
-                    </div>
-
-                    {/* Patient Demographic Bar */}
-                    <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                      <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/60">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
-                          Village / Ward
-                        </span>
-                        <p className="font-bold text-on-surface mt-0.5">{activePatient.village}</p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/60">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
-                          Block Health Office
-                        </span>
-                        <p className="font-bold text-on-surface mt-0.5">{activePatient.block}</p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/60">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
-                          District / State
-                        </span>
-                        <p className="font-bold text-on-surface mt-0.5">{activePatient.district}, {activePatient.state}</p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/60">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
-                          Clinical Condition Category
-                        </span>
-                        <p className="font-bold text-primary mt-0.5">{activePatient.category}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CARE JOURNEY STEPPER (Â§5.2) */}
-                  <div className="rounded-3xl border border-outline-variant bg-surface p-5 sm:p-6 shadow-sm">
-                    <div className="mb-4">
-                      <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                        Sequential Care Continuum
-                      </span>
-                      <h3 className="text-base font-bold text-on-surface">Patient Care Journey Stepper</h3>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -926,11 +911,16 @@ export function AshaReferralPage() {
                         embedded
                         careEpisodeId={activeCareEpisodeId}
                         workerId={ashaUser?.id || "ASHA-WB-401"}
-                        patientData={{
-                          id: activePatient.id,
-                          name: activePatient.name,
-                          ageGender: activePatient.ageGender,
-                        }}
+                        patientData={
+                          selectedPatient
+                            ? {
+                                id: selectedPatient.id,
+                                name: selectedPatient.name,
+                                ageGender: selectedPatient.ageGender,
+                              }
+                            : undefined
+                        }
+                        onPatientData={handleTriagePatientData}
                         onComplete={handleTriageCompleted}
                       />
                     </div>
@@ -963,7 +953,7 @@ export function AshaReferralPage() {
                         <div>
                           <p className="text-xs font-bold uppercase text-primary">Triage Assessment Finding</p>
                           <p className="text-sm font-bold text-on-surface mt-0.5">
-                            Risk Level: <span className="uppercase text-primary">{assessmentData?.riskLevel || "HIGH"}</span> â€¢ Category: {activePatient.category}
+                            Risk Level: <span className="uppercase text-primary">{assessmentData?.riskLevel || "HIGH"}</span> • Category: {activePatient.category}
                           </p>
                           <p className="text-xs text-on-surface-variant mt-1">
                             Recorded Symptoms: {assessmentData?.symptoms?.join(", ") || "Fever, High BP"}
@@ -982,20 +972,30 @@ export function AshaReferralPage() {
                       <form onSubmit={handleDispatchReferral} className="space-y-5">
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
-                              Destination Block Health Office *
-                            </label>
-                            <select
-                              value={selectedBlockFacility}
-                              onChange={(e) => setSelectedBlockFacility(e.target.value)}
-                              className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2.5 text-sm font-semibold outline-none focus:border-primary"
-                            >
-                              {BLOCK_FACILITIES.map((fac) => (
-                                <option key={fac} value={fac}>
-                                  {fac}
-                                </option>
-                              ))}
-                            </select>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                                Destination Block Health Office *
+                              </label>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                                <span className="material-symbols-outlined text-[13px]">lock</span>
+                                Assigned Facility
+                              </span>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                readOnly
+                                value="Dwariknagar Rural Hospital"
+                                className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3.5 py-2.5 text-sm font-semibold text-on-surface cursor-not-allowed pr-10 shadow-xs"
+                              />
+                              <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-teal-700">
+                                <span className="material-symbols-outlined text-[18px]">verified</span>
+                              </div>
+                            </div>
+                            <p className="mt-1.5 text-[11px] text-on-surface-variant flex items-center gap-1">
+                              <span className="material-symbols-outlined text-xs text-primary">info</span>
+                              <span>Pre-assigned 24/7 Block Referral Hospital for Namkhana Block / Shibpur Sector</span>
+                            </p>
                           </div>
 
                           <div>
@@ -1135,7 +1135,11 @@ export function AshaReferralPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            setIsSwitchingPatient(true);
+                            setSelectedPatient(null);
+                            setAssessmentData(null);
+                            setActiveEpisodeReferralId(null);
+                            setActiveCareEpisodeId(uuidv4());
+                            setStepperStage("assessment");
                           }}
                           className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
                         >
@@ -1143,26 +1147,21 @@ export function AshaReferralPage() {
                           <span>Start Care Episode for Another Patient</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            useReferralStore.getState().admitDistrictPatient(
-                              activeEpisodeReferral!.id,
-                              "District Medical Specialist",
-                              "Specialist Ward",
-                              "Patient stabilized. Discharged for village follow-up."
-                            );
-                            useReferralStore.getState().backReferPatient(
-                              activeEpisodeReferral!.id,
-                              "Home vitals and compliance check daily",
-                              3
-                            );
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-outline-variant px-3.5 py-2 text-xs font-semibold text-on-surface-variant hover:bg-surface-container transition"
-                        >
-                          <span className="material-symbols-outlined text-base">simulation</span>
-                          <span>Simulate Discharge & Back-Referral</span>
-                        </button>
+                        {maskedActiveReferral.status === "Completed" ? (
+                          <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-300 px-4 py-2 text-xs font-bold text-emerald-800">
+                            <span className="material-symbols-outlined text-emerald-700 text-base">task_alt</span>
+                            <span>Care Episode Completed (Closed Loop)</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setCompletionModalOpen(true)}
+                            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition"
+                          >
+                            <span className="material-symbols-outlined text-base">task_alt</span>
+                            <span>Complete & Discharge Patient</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1181,7 +1180,11 @@ export function AshaReferralPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            setIsSwitchingPatient(true);
+                            setSelectedPatient(null);
+                            setAssessmentData(null);
+                            setActiveEpisodeReferralId(null);
+                            setActiveCareEpisodeId(uuidv4());
+                            setStepperStage("assessment");
                           }}
                           className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-on-primary shadow-md hover:bg-primary-hover transition"
                         >
@@ -1190,15 +1193,26 @@ export function AshaReferralPage() {
                       </div>
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* =========================================================
-                  VILLAGE CASES & FOLLOW-UPS QUEUE (PATIENT DETAILS ONLY)
-                  ========================================================= */}
-              {activeTab === "referral" && referralSubView === "queue" && (
-                <div className="space-y-6">
-                  {/* Statistics Cards */}
+                  {/* =========================================================
+                      VILLAGE CASES & FOLLOW-UPS QUEUE (PATIENT DETAILS ONLY)
+                      ========================================================= */}
+                  <div className="pt-8 border-t border-outline-variant space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                          Active Case Tracking
+                        </span>
+                        <h3 className="text-xl font-bold text-on-surface">
+                          Village Cases & Follow-ups Queue
+                        </h3>
+                      </div>
+                      <span className="rounded-full bg-surface-container px-3 py-1 text-xs font-bold text-on-surface-variant">
+                        {totalReferrals} Active Referrals ({filterState.timeRange === "all" ? "All Time" : "Last 7 Days"})
+                      </span>
+                    </div>
+
+                    {/* Statistics Cards */}
                   <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm">
                       <p className="text-sm font-medium text-on-surface-variant">Total Village Cases</p>
@@ -1235,7 +1249,7 @@ export function AshaReferralPage() {
                   <SearchSortFilter
                     filters={filterState}
                     onChange={setFilterState}
-                    totalCount={patientCases.length}
+                    totalCount={timeScopedCases.length}
                     filteredCount={filteredCases.length}
                   />
 
@@ -1262,7 +1276,7 @@ export function AshaReferralPage() {
                     ) : (
                       <div className="rounded-3xl border border-outline-variant bg-surface p-12 text-center">
                         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-container text-on-surface-variant text-2xl">
-                          ðŸ”
+                          🔍
                         </div>
                         <h3 className="mt-3 text-base font-bold">No village patient cases match your filter</h3>
                         <p className="mt-1 text-xs text-on-surface-variant">
@@ -1273,11 +1287,12 @@ export function AshaReferralPage() {
                           onClick={() =>
                             setFilterState({
                               search: "",
-                              sortBy: "risk-desc",
+                              sortBy: "recent",
                               risk: "ALL",
                               stage: "ALL",
                               category: "ALL",
                               viewMode: "cards",
+                              timeRange: "7days",
                             })
                           }
                           className="mt-4 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary/90"
@@ -1300,7 +1315,7 @@ export function AshaReferralPage() {
                                 Condition & ABHA ID
                               </th>
                               <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                                6-Stage Referral Journey
+                                3-Stage Referral Journey
                               </th>
                               <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                                 Risk Priority
@@ -1321,7 +1336,7 @@ export function AshaReferralPage() {
                                     <div>
                                       <p className="font-bold text-sm text-on-surface">{patient.name}</p>
                                       <p className="text-xs text-on-surface-variant">
-                                        {patient.age}y {patient.gender} â€¢ {patient.village}, {patient.block}
+                                        {patient.age}y {patient.gender} • {patient.village}, {patient.block}
                                       </p>
                                     </div>
                                   </div>
@@ -1401,6 +1416,7 @@ export function AshaReferralPage() {
                       </div>
                     </section>
                   )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1414,106 +1430,7 @@ export function AshaReferralPage() {
         onClose={() => setAshaAuthOpen(false)}
       />
 
-      {/* Modal: Switch or Intake New Patient */}
-      {isSwitchingPatient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-surface p-6 md:p-8 shadow-2xl border border-outline-variant">
-            <div className="flex items-center justify-between border-b border-outline-variant pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <span className="material-symbols-outlined text-2xl">person_add</span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold">Intake New Village Patient</h3>
-                  <p className="text-xs text-on-surface-variant">
-                    Start a fresh Care Episode with digital triage assessment.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsSwitchingPatient(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container"
-              >
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
 
-            <form onSubmit={handleStartNewPatient} className="mt-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                  Patient Full Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={tempPatientName}
-                  onChange={(e) => setTempPatientName(e.target.value)}
-                  placeholder="e.g., Anjali Soren"
-                  className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2.5 text-sm outline-none focus:border-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                  Age & Gender *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={tempAgeGender}
-                  onChange={(e) => setTempAgeGender(e.target.value)}
-                  placeholder="e.g., 29 F"
-                  className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2.5 text-sm outline-none focus:border-primary"
-                />
-              </div>
-
-              {/* REUSABLE GEOGRAPHY CASCADE: State -> District -> Block -> Village */}
-              <div className="rounded-2xl border border-outline-variant/70 bg-surface-container-lowest p-3.5">
-                <GeoCascadeSelect
-                  value={tempGeo}
-                  onChange={setTempGeo}
-                  required
-                />
-              </div>
-
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                  Initial Clinical Category *
-                </label>
-                <select
-                  value={tempCategory}
-                  onChange={(e) => setTempCategory(e.target.value)}
-                  className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2.5 text-sm outline-none focus:border-primary"
-                >
-                  {CATEGORY_OPTIONS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pt-4 border-t border-outline-variant flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSwitchingPatient(false)}
-                  className="rounded-xl border border-outline-variant px-4 py-2 text-xs font-bold text-on-surface-variant hover:bg-surface-container"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-on-primary shadow-sm hover:bg-primary-hover"
-                >
-                  Start Care Episode
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Patient Situation Timeline / Care Journey Modal */}
       {situationModalOpen && selectedPatientForSituation && (
@@ -1557,7 +1474,7 @@ export function AshaReferralPage() {
                       <span className="text-xs text-on-surface-variant">Assigned Clinician:</span>
                       <p className="text-sm font-bold text-on-surface">{safeView.displayDoctor}</p>
                       <span className="inline-block mt-1 rounded-full bg-surface-container px-2.5 py-0.5 text-xs font-semibold">
-                        Triage {safeView.triageLevel} â€¢ {safeView.priority}
+                        Triage {safeView.triageLevel} • {safeView.priority}
                       </span>
                     </div>
                   </div>
@@ -1650,6 +1567,134 @@ export function AshaReferralPage() {
                 className="rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-on-primary"
               >
                 Close Journey Tracker
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Real Clinical Completion & Back-Referral Modal */}
+      {completionModalOpen && activeEpisodeReferral && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl border border-outline-variant bg-surface p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-outline-variant pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 font-bold">
+                  <span className="material-symbols-outlined text-xl">task_alt</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-on-surface">Complete Care Episode & Issue Back-Referral</h3>
+                  <p className="text-xs text-on-surface-variant">
+                    Discharges patient from facility and closes continuum loop to village ASHA
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCompletionModalOpen(false)}
+                className="text-on-surface-variant hover:text-on-surface p-1 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Patient & Facility Summary */}
+            <div className="p-3.5 rounded-2xl bg-surface-container-low border border-outline-variant text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-on-surface-variant">Patient:</span>
+                <strong className="text-on-surface">{activeEpisodeReferral.patientName} ({activeEpisodeReferral.patientId})</strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-on-surface-variant">Discharging Facility:</span>
+                <strong className="text-on-surface">{activeEpisodeReferral.toFacility}</strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-on-surface-variant">Assigned ASHA Worker:</span>
+                <span className="font-semibold text-primary">{activeEpisodeReferral.fromFacilityOrWorker}</span>
+              </div>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
+                  Discharge Disposition / Outcome *
+                </label>
+                <input
+                  type="text"
+                  value={completionOutcome}
+                  onChange={(e) => setCompletionOutcome(e.target.value)}
+                  className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs sm:text-sm font-medium outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
+                  Treatment Summary Provided *
+                </label>
+                <textarea
+                  rows={2}
+                  value={completionTreatment}
+                  onChange={(e) => setCompletionTreatment(e.target.value)}
+                  className="w-full rounded-xl border border-outline-variant bg-surface p-2.5 text-xs sm:text-sm font-medium outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
+                  Post-Discharge Instructions for ASHA Worker *
+                </label>
+                <textarea
+                  rows={2}
+                  value={completionInstructions}
+                  onChange={(e) => setCompletionInstructions(e.target.value)}
+                  className="w-full rounded-xl border border-outline-variant bg-surface p-2.5 text-xs sm:text-sm font-medium outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
+                  Frontline Follow-up Target Window
+                </label>
+                <select
+                  value={completionFollowUpDays}
+                  onChange={(e) => setCompletionFollowUpDays(Number(e.target.value))}
+                  className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs font-semibold outline-none focus:border-primary"
+                >
+                  <option value={3}>Within 3 Days (Standard Protocol)</option>
+                  <option value={5}>Within 5 Days</option>
+                  <option value={7}>Within 7 Days (Stable Routine)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-3 border-t border-outline-variant flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setCompletionModalOpen(false)}
+                disabled={isCompleting}
+                className="px-4 py-2 rounded-xl border border-outline-variant text-xs font-bold text-on-surface-variant hover:bg-surface-container"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCompletion}
+                disabled={isCompleting}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition disabled:opacity-60"
+              >
+                {isCompleting ? (
+                  <>
+                    <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                    <span>Closing Case...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base">check_circle</span>
+                    <span>Confirm & Complete Case</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

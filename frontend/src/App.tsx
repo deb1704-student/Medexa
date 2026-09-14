@@ -12,6 +12,7 @@ import { MedicineAvailabilityPage } from "@/pages/MedicineAvailabilityPage";
 import { DiagnosticsPage } from "@/pages/DiagnosticsPage";
 import { DoctorAvailabilityPage } from "@/pages/DoctorAvailabilityPage";
 import { HighRiskFollowUpPage } from "@/pages/HighRiskFollowUpPage";
+import { AshaMedicineAvailabilityPage } from "@/pages/AshaMedicineAvailabilityPage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
@@ -41,6 +42,14 @@ export function App() {
           element={
             <ProtectedRoute allowedRoles={["ASHA"]}>
               <AshaReferralPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/asha/medicines"
+          element={
+            <ProtectedRoute allowedRoles={["ASHA"]}>
+              <AshaMedicineAvailabilityPage />
             </ProtectedRoute>
           }
         />

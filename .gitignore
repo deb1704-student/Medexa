@@ -36,3 +36,6 @@ Thumbs.db
 # Secrets & Certificates
 *.pem
 *.key
+
+__pycache__/
+*.pyc

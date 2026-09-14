@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from "uuid";
 import { useMemo, useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DashboardSidebar } from "@/components/common/DashboardSidebar";
@@ -78,7 +79,7 @@ export function RuralOfficeDashboardPage() {
   // Single Dedicated Block Officer Auth Modal
   const [blockAuthOpen, setBlockAuthOpen] = useState(() => searchParams.get("create") === "true" && !isOfficer);
 
-  // New CHC/PHC Referral Modal (To Regional Hospital)
+  // Walk-in Patient Intake Modal & Escalation
   const [isNewModalOpen, setIsNewModalOpen] = useState(() => searchParams.get("create") === "true" && isOfficer);
   const [newGeo, setNewGeo] = useState<GeoValue>({
     state: "West Bengal",
@@ -89,11 +90,21 @@ export function RuralOfficeDashboardPage() {
 
   const [newPatientName, setNewPatientName] = useState("");
   const [newAgeGender, setNewAgeGender] = useState("");
-  const [newFromFacility, setNewFromFacility] = useState("Dwariknagar Rural Hospital");
+  const [newPhone, setNewPhone] = useState("");
+  const [newComplaint, setNewComplaint] = useState("");
+  const [newDisposition, setNewDisposition] = useState<"CHC_ADMIT" | "ESCALATE_DISTRICT">("CHC_ADMIT");
+  const [newVitals, setNewVitals] = useState({
+    bp: "",
+    pulse: "",
+    spo2: "",
+    temp: "",
+    weight: "",
+  });
+  const [newFromFacility] = useState("Namkhana Community Health Centre (CHC)");
   const [newToFacility, setNewToFacility] = useState("Regional Hospital");
-  const [newTriage, setNewTriage] = useState<UnifiedReferral["triageLevel"]>("RED");
-  const [newSpecialty, setNewSpecialty] = useState("Emergency Cardiology");
-  const [newDoctor] = useState("Dr. A. Sen (Chief Specialist)");
+  const [newTriage, setNewTriage] = useState<UnifiedReferral["triageLevel"]>("YELLOW");
+  const [newSpecialty, setNewSpecialty] = useState("General Medicine / OPD");
+  const [newDoctor, setNewDoctor] = useState("Dr. P. Roy (CHC Medical Officer)");
   const [newTransport, setNewTransport] = useState("108 ALS Ambulance");
   const [newReason, setNewReason] = useState("");
 
@@ -104,6 +115,45 @@ export function RuralOfficeDashboardPage() {
   const [escalateDoctor, setEscalateDoctor] = useState("Dr. A. Sen (Regional Hospital Specialist)");
   const [escalateTransport, setEscalateTransport] = useState("108 ALS Ambulance");
   const [escalateNotes, setEscalateNotes] = useState("");
+
+  // Terminated from Hospital modal state
+  const [terminateModalOpen, setTerminateModalOpen] = useState(false);
+  const [selectedReferralToTerminate, setSelectedReferralToTerminate] = useState<UnifiedReferral | null>(null);
+  const [terminateNotes, setTerminateNotes] = useState("");
+  const [terminateStatus, setTerminateStatus] = useState<UnifiedReferral["status"]>("Completed");
+
+  const handleOpenTerminateModal = (item: UnifiedReferral) => {
+    setSelectedReferralToTerminate(item);
+    setTerminateNotes(`Patient evaluated and treated at ${blockOfficerUser?.facilityOrVillage || "Namkhana CHC"}. Condition stabilized, discharged home.`);
+    setTerminateModalOpen(true);
+  };
+
+  const handleConfirmTerminate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReferralToTerminate) return;
+
+    try {
+      await referralApi.completeReferralWithBackReferral({
+        referralId: selectedReferralToTerminate.id,
+        outcome: terminateNotes || "Patient treated and discharged from CHC",
+        recordedBy: blockOfficerUser?.name ? `${blockOfficerUser.name} (${blockOfficerUser.id})` : "Dr. Anirban Roy (BMOH)",
+      });
+    } catch {
+      try {
+        await queueReferralTransitionOfflineFirst(
+          selectedReferralToTerminate.id,
+          "CLOSED",
+          terminateNotes || "Patient treated and discharged from CHC"
+        );
+      } catch (err) {
+        console.warn("Could not queue offline transition:", err);
+      }
+    }
+
+    useReferralStore.getState().terminateOrDischargePatient(selectedReferralToTerminate.id, terminateNotes, terminateStatus);
+    setTerminateModalOpen(false);
+    setSelectedReferralToTerminate(null);
+  };
 
   const [recordDrawerOpen, setRecordDrawerOpen] = useState(false);
   const [selectedPatientForRecord, setSelectedPatientForRecord] = useState<PatientCase | null>(null);
@@ -117,7 +167,7 @@ export function RuralOfficeDashboardPage() {
   const blockReferrals = useMemo(() => {
     if (!blockOfficerUser) return [];
 
-    const facId = blockOfficerUser.facilityId;
+    const facId = blockOfficerUser.facilityId || "MED-WB-FAC-000003";
     const facName = (blockOfficerUser.facilityOrVillage || "").toLowerCase();
 
     return list.filter((r) => {
@@ -195,23 +245,44 @@ export function RuralOfficeDashboardPage() {
     e.preventDefault();
     if (!newPatientName.trim()) return;
 
-    const newPatId = `PAT-${Math.floor(9100 + Math.random() * 900)}`;
-    const reasonText = newReason || "Referred from Block Office to District Hospital for specialized evaluation.";
+    const newPatId = uuidv4();
+    const careEpisodeId = uuidv4();
+    const newRefId = uuidv4();
+
+    const reasonText = newComplaint || newReason || "Walk-in patient at CHC facility";
+    const status: UnifiedReferral["status"] = newDisposition === "ESCALATE_DISTRICT" ? "Escalated to District" : "At Block Office";
+    const currentFac = blockOfficerUser?.facilityOrVillage || newFromFacility || "Dwariknagar Rural Hospital (CHC)";
+    const currentFacId = blockOfficerUser?.facilityId || "MED-WB-FAC-000003";
+    const targetFacility = newDisposition === "ESCALATE_DISTRICT" ? newToFacility : currentFac;
+    const targetFacilityId = newDisposition === "ESCALATE_DISTRICT" ? "MED-WB-FAC-000345" : currentFacId;
+    const notesWithVitals = `${reasonText}${newVitals.bp ? ` | Vitals: BP ${newVitals.bp}, Pulse ${newVitals.pulse}, SpO2 ${newVitals.spo2}%, Temp ${newVitals.temp}` : ""}${newPhone ? ` | Tel: ${newPhone}` : ""}`;
+
+    const ageMatch = (newAgeGender || "48 M").match(/\d+/);
+    const parsedAge = ageMatch ? Number(ageMatch[0]) : 48;
+    const sex = /\bF\b/i.test(newAgeGender) ? "female" : /\bM\b/i.test(newAgeGender) ? "male" : "other";
 
     try {
-      const ageMatch = (newAgeGender || "48 M").match(/\d+/);
-      const parsedAge = ageMatch ? Number(ageMatch[0]) : 48;
-      const sex = /\bF\b/i.test(newAgeGender) ? "female" : /\bM\b/i.test(newAgeGender) ? "male" : "other";
-      const careEpisodeId = `EP-${newPatId}`;
-      await ensurePatientAndEpisode({ patientId: newPatId, patientName: newPatientName, age: parsedAge, sex, villageOrWard: newGeo.village, careEpisodeId, createdBy: blockOfficerUser?.id || "demo-doctor-001" });
-      const created = await referralApi.createReferral({
-        patientId: newPatId, careEpisodeId,
-        priority: newTriage === "RED" ? "CRITICAL" : newTriage === "YELLOW" ? "HIGH" : "MEDIUM",
-        reason: reasonText,
+      await ensurePatientAndEpisode({
+        patientId: newPatId,
+        patientName: newPatientName,
+        age: parsedAge,
+        sex,
+        villageOrWard: newGeo.village,
+        phone: newPhone || undefined,
+        careEpisodeId,
         createdBy: blockOfficerUser?.id || "demo-doctor-001",
-        fromFacilityId: "MED-WB-FAC-000372",
-        toFacilityId: "MED-WB-FAC-000349",
-        currentState: "EMERGENCY_ESCALATED",
+      });
+
+      const created = await referralApi.createReferral({
+        id: newRefId,
+        patientId: newPatId,
+        careEpisodeId,
+        priority: newTriage === "RED" ? "CRITICAL" : newTriage === "YELLOW" ? "HIGH" : "MEDIUM",
+        reason: notesWithVitals,
+        createdBy: blockOfficerUser?.id || "demo-doctor-001",
+        fromFacilityId: currentFacId,
+        toFacilityId: targetFacilityId,
+        currentState: newDisposition === "ESCALATE_DISTRICT" ? "EMERGENCY_ESCALATED" : "RECEIVED",
       });
 
       addBlockReferral({
@@ -223,38 +294,69 @@ export function RuralOfficeDashboardPage() {
         district: newGeo.district,
         block: newGeo.block,
         village: newGeo.village,
-        fromFacilityOrWorker: newFromFacility,
-        toFacility: newToFacility,
+        fromFacilityOrWorker: newDisposition === "ESCALATE_DISTRICT" ? currentFac : "Walk-in Registration Desk",
+        toFacility: targetFacility,
+        toFacilityId: targetFacilityId,
+        fromFacilityId: currentFacId,
         category: newSpecialty,
         priority: newTriage === "RED" ? "Emergency" : newTriage === "YELLOW" ? "High" : "Normal",
         triageLevel: newTriage,
-        status: "Escalated to District",
+        status,
         assignedDoctor: newDoctor,
-        clinicalNotes: reasonText,
-        escortTransport: newTransport,
+        clinicalNotes: notesWithVitals,
+        escortTransport: newDisposition === "ESCALATE_DISTRICT" ? newTransport : "Walk-in OPD",
       });
-    } catch {
-      const ageMatch = (newAgeGender || "48 M").match(/\d+/);
-      const parsedAge = ageMatch ? Number(ageMatch[0]) : 48;
-      const sex = /\bF\b/i.test(newAgeGender) ? "female" : /\bM\b/i.test(newAgeGender) ? "male" : "other";
+    } catch (err) {
+      console.warn("handleCreateBlockReferral online write deferred, queuing offline:", err);
       try {
         const queued = await queueReferralOfflineFirst({
-          patientId: newPatId, patientName: newPatientName, age: parsedAge, sex, villageOrWard: newGeo.village,
-          careEpisodeId: `EP-${newPatId}`, fromFacilityId: "MED-WB-FAC-000372", toFacilityId: "MED-WB-FAC-000349",
-          reason: reasonText, createdBy: blockOfficerUser?.id || "demo-doctor-001",
+          id: newRefId,
+          patientId: newPatId,
+          patientName: newPatientName,
+          age: parsedAge,
+          sex,
+          villageOrWard: newGeo.village,
+          phone: newPhone || undefined,
+          careEpisodeId,
+          fromFacilityId: currentFacId,
+          toFacilityId: targetFacilityId,
+          reason: notesWithVitals,
+          createdBy: blockOfficerUser?.id || "demo-doctor-001",
           priority: newTriage === "RED" ? "CRITICAL" : newTriage === "YELLOW" ? "HIGH" : "MEDIUM",
         });
-        addBlockReferral({ ...queued, patientName: newPatientName, patientId: newPatId, ageGender: newAgeGender || "48 M", state: newGeo.state, district: newGeo.district, block: newGeo.block, village: newGeo.village, fromFacilityOrWorker: newFromFacility, toFacility: newToFacility, category: newSpecialty, priority: newTriage === "RED" ? "Emergency" : newTriage === "YELLOW" ? "High" : "Normal", triageLevel: newTriage, status: "Escalated to District", assignedDoctor: newDoctor, clinicalNotes: reasonText, escortTransport: newTransport });
+        addBlockReferral({
+          ...queued,
+          patientName: newPatientName,
+          patientId: newPatId,
+          ageGender: newAgeGender || "48 M",
+          state: newGeo.state,
+          district: newGeo.district,
+          block: newGeo.block,
+          village: newGeo.village,
+          fromFacilityOrWorker: newDisposition === "ESCALATE_DISTRICT" ? currentFac : "Walk-in Registration Desk",
+          toFacility: targetFacility,
+          toFacilityId: targetFacilityId,
+          fromFacilityId: currentFacId,
+          category: newSpecialty,
+          priority: newTriage === "RED" ? "Emergency" : newTriage === "YELLOW" ? "High" : "Normal",
+          triageLevel: newTriage,
+          status,
+          assignedDoctor: newDoctor,
+          clinicalNotes: notesWithVitals,
+          escortTransport: newDisposition === "ESCALATE_DISTRICT" ? newTransport : "Walk-in OPD",
+        });
       } catch (queueErr) {
         console.error("Block referral could not be saved online or queued offline:", queueErr);
-        throw queueErr;
       }
     }
 
     setIsNewModalOpen(false);
     setNewPatientName("");
     setNewAgeGender("");
+    setNewPhone("");
+    setNewComplaint("");
     setNewReason("");
+    setNewVitals({ bp: "", pulse: "", spo2: "", temp: "", weight: "" });
   };
 
   const handleEscalateSubmit = async (e: React.FormEvent) => {
@@ -319,8 +421,8 @@ export function RuralOfficeDashboardPage() {
                   onClick={handleOpenNewModal}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-indigo-800 active:scale-[0.98]"
                 >
-                  <span className="material-symbols-outlined text-base">add_circle</span>
-                  <span>{tPortal("createBlockReferral", "Create CHC Referral")}</span>
+                  <span className="material-symbols-outlined text-base">person_add</span>
+                  <span>+ New Patient (Walk-in)</span>
                 </button>
               ) : null
             }
@@ -563,6 +665,21 @@ export function RuralOfficeDashboardPage() {
 
             {/* Referrals Queue Table */}
             <section className="overflow-hidden rounded-3xl border border-outline-variant bg-surface shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 border-b border-outline-variant/60 gap-3">
+                <div>
+                  <h3 className="font-bold text-base text-on-surface">CHC Patient Referral & Admission Queue</h3>
+                  <p className="text-xs text-on-surface-variant">Live clinical cases from village ASHAs and CHC walk-in OPD</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenNewModal}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-700 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-800 transition active:scale-[0.98]"
+                >
+                  <span className="material-symbols-outlined text-base">person_add</span>
+                  <span>+ New Patient (Walk-in)</span>
+                </button>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1100px] text-left">
                   <thead className="border-b border-outline-variant bg-surface-container-low">
@@ -583,7 +700,7 @@ export function RuralOfficeDashboardPage() {
                         {tPortal("statusAndAction", "Status & Action")}
                       </th>
                       <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                        {tPortal("management", "Management")}
+                        Frontline Actions
                       </th>
                     </tr>
                   </thead>
@@ -656,10 +773,11 @@ export function RuralOfficeDashboardPage() {
                           </p>
                         </td>
 
-                        {/* Management Actions */}
+                        {/* 3 SIDE-BY-SIDE ACTIONS: 1. ESCALATE, 2. VIEW RECORD, 3. TERMINATED */}
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {item.status !== "Escalated to District" && (item.status as string) !== "Escalated to Regional Hospital" && (
+                            {/* 1. ESCALATE */}
+                            {item.status !== "Escalated to District" && (item.status as string) !== "Escalated to Regional Hospital" ? (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -670,30 +788,53 @@ export function RuralOfficeDashboardPage() {
                                   setSelectedReferralToEscalate(item);
                                   setIsEscalateModalOpen(true);
                                 }}
-                                className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-bold text-red-800 transition hover:bg-red-200"
+                                className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-2.5 py-1.5 text-xs font-bold text-red-800 transition hover:bg-red-200"
+                                title="Escalate patient to Regional Hospital"
                               >
                                 <span className="material-symbols-outlined text-[15px]">arrow_upward</span>
-                                {tPortal("escalateToDistrict", "Escalate To Regional Hospital")}
+                                <span>Escalate</span>
                               </button>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-200 px-2 py-1 text-[11px] font-bold text-red-700">
+                                <span className="material-symbols-outlined text-[13px]">done</span>
+                                Escalated
+                              </span>
                             )}
 
+                            {/* 2. VIEW RECORD */}
                             <button
                               type="button"
                               onClick={() => handleOpenRecordForReferral(item)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-2.5 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
+                              className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs font-semibold text-on-surface hover:bg-surface-container transition"
                               title={tPortal("viewRecord", "View Longitudinal Health Record")}
                             >
                               <span className="material-symbols-outlined text-[15px]">history_edu</span>
-                              <span>{tPortal("viewRecord", "Record")}</span>
+                              <span>View Record</span>
                             </button>
 
-                            <Link
-                              to={`/dashboard/referrals/${item.id}`}
-                              className="inline-flex items-center gap-1 rounded-lg bg-surface-container px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white"
-                            >
-                              {tPortal("management", "Manage")}
-                              <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                            </Link>
+                            {/* 3. TERMINATED FROM HOSPITAL */}
+                            {item.status !== "Completed" && item.status !== "Back-Referred" ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!isOfficer) {
+                                    setBlockAuthOpen(true);
+                                    return;
+                                  }
+                                  handleOpenTerminateModal(item);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-2.5 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-200 transition"
+                                title="Discharge patient after treatment at CHC"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">check_circle</span>
+                                <span>Terminated</span>
+                              </button>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-1 text-[11px] font-bold text-emerald-700">
+                                <span className="material-symbols-outlined text-[13px]">task_alt</span>
+                                Discharged
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -727,7 +868,7 @@ export function RuralOfficeDashboardPage() {
       </div>
 
       {/* =========================================================
-          MODAL: CREATE NEW CHC REFERRAL (REFER TO REGIONAL HOSPITAL)
+          MODAL: WALK-IN PATIENT INTAKE & CLINICAL ADMISSION (CHC)
       ========================================================= */}
       {isNewModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -735,12 +876,12 @@ export function RuralOfficeDashboardPage() {
             <div className="flex items-center justify-between border-b border-outline-variant pb-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-800">
-                  <span className="material-symbols-outlined text-2xl">domain</span>
+                  <span className="material-symbols-outlined text-2xl">person_add</span>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">Create CHC Referral</h2>
+                  <h2 className="text-xl font-bold text-on-surface">Walk-in Patient Intake & Registration</h2>
                   <p className="text-xs text-on-surface-variant">
-                    Refer patient from CHC/PHC <strong>To Regional Hospital</strong>
+                    Direct outpatient registration & clinical admission at <strong>{blockOfficerUser?.facilityOrVillage || "Namkhana CHC"}</strong>
                   </p>
                 </div>
               </div>
@@ -753,12 +894,52 @@ export function RuralOfficeDashboardPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateBlockReferral} className="mt-5 space-y-5">
-              {/* Reusable Geographic Cascade (State -> District -> Block -> Village) */}
-              <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-3 flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-base">pin_drop</span>
-                  Administrative Location Hierarchy (State → District → Block → Village)
+            <form onSubmit={handleCreateBlockReferral} className="mt-5 space-y-5 text-xs">
+              {/* Disposition Selection */}
+              <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
+                <label className="block text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2">
+                  Clinical Disposition / Action
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setNewDisposition("CHC_ADMIT")}
+                    className={`flex items-center gap-2 rounded-xl p-3 border font-bold transition text-left ${
+                      newDisposition === "CHC_ADMIT"
+                        ? "bg-indigo-700 text-white border-indigo-700 shadow-xs"
+                        : "bg-surface text-on-surface border-outline-variant hover:bg-surface-container"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-lg">domain</span>
+                    <div>
+                      <p className="text-xs">Admit / Treat at CHC</p>
+                      <p className="text-[10px] font-normal opacity-85">Manage in CHC ward or OPD</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewDisposition("ESCALATE_DISTRICT")}
+                    className={`flex items-center gap-2 rounded-xl p-3 border font-bold transition text-left ${
+                      newDisposition === "ESCALATE_DISTRICT"
+                        ? "bg-red-700 text-white border-red-700 shadow-xs"
+                        : "bg-surface text-on-surface border-outline-variant hover:bg-surface-container"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-lg">emergency</span>
+                    <div>
+                      <p className="text-xs">Escalate to Regional Hospital</p>
+                      <p className="text-[10px] font-normal opacity-85">Tertiary care transfer</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Administrative Geographic Hierarchy */}
+              <div className="rounded-2xl border border-outline-variant bg-surface-container-low/50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-on-surface mb-3 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base text-indigo-700">pin_drop</span>
+                  Patient Administrative Location (State → District → Block → Village)
                 </p>
 
                 <GeoCascadeSelect
@@ -768,11 +949,11 @@ export function RuralOfficeDashboardPage() {
                 />
               </div>
 
-
-              <div className="grid gap-4 sm:grid-cols-2">
+              {/* Patient Basic Details */}
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                    Patient Name *
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Patient Full Name *
                   </label>
                   <input
                     type="text"
@@ -780,12 +961,12 @@ export function RuralOfficeDashboardPage() {
                     value={newPatientName}
                     onChange={(e) => setNewPatientName(e.target.value)}
                     placeholder="e.g. Ramesh Chandra Das"
-                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-xs outline-none focus:border-indigo-600 font-semibold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
+                  <label className="block text-xs font-bold text-on-surface mb-1">
                     Age & Gender *
                   </label>
                   <input
@@ -793,115 +974,283 @@ export function RuralOfficeDashboardPage() {
                     required
                     value={newAgeGender}
                     onChange={(e) => setNewAgeGender(e.target.value)}
-                    placeholder="e.g. 48 M"
-                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                    placeholder="e.g. 48 M / 32 F"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-xs outline-none focus:border-indigo-600 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Contact Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    placeholder="e.g. +91 98301 23456"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-xs outline-none focus:border-indigo-600 font-mono"
                   />
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                    Referring CHC/PHC Facility
-                  </label>
-                  <select
-                    value={newFromFacility}
-                    onChange={(e) => setNewFromFacility(e.target.value)}
-                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
-                  >
-                    <option value="Dwariknagar Rural Hospital">Dwariknagar Rural Hospital</option>
-                    <option value="Namkhana CHC">Namkhana CHC</option>
-                    <option value="Maharajganj Rural Hospital (CHC)">Maharajganj Rural Hospital (CHC)</option>
-                  </select>
-                </div>
+              {/* Presenting Complaint & Symptoms */}
+              <div>
+                <label className="block text-xs font-bold text-on-surface mb-1">
+                  Presenting Complaint & Chief Symptoms *
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={newComplaint}
+                  onChange={(e) => setNewComplaint(e.target.value)}
+                  placeholder="Describe patient presenting complaints, pain, onset, and symptoms observed..."
+                  className="w-full rounded-xl border border-outline-variant bg-surface-container-low p-3 text-xs outline-none focus:border-indigo-600 leading-relaxed resize-none"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                    Destination (To Regional Hospital) *
-                  </label>
-                  <select
-                    value={newToFacility}
-                    onChange={(e) => setNewToFacility(e.target.value)}
-                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
-                  >
-                    <option value="Diamond Harbour DH">Diamond Harbour DH</option>
-                    <option value="Regional Medical College & Tertiary Hospital">Regional Medical College & Tertiary Hospital</option>
-                    <option value="Regional Mother & Child Speciality Hospital">Regional Mother & Child Speciality Hospital</option>
-                  </select>
+              {/* Vitals Check */}
+              <div className="rounded-2xl border border-outline-variant/80 bg-surface-container-low/40 p-3.5">
+                <p className="text-xs font-bold text-on-surface mb-2 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base text-indigo-700">vital_signs</span>
+                  <span>Intake Vitals Check (BP, Pulse, SpO2, Temp, Weight):</span>
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant mb-1">BP (mmHg)</label>
+                    <input
+                      type="text"
+                      placeholder="120/80"
+                      value={newVitals.bp}
+                      onChange={(e) => setNewVitals({ ...newVitals, bp: e.target.value })}
+                      className="w-full rounded-xl border border-outline-variant bg-background p-2 text-xs outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant mb-1">Pulse (bpm)</label>
+                    <input
+                      type="text"
+                      placeholder="76"
+                      value={newVitals.pulse}
+                      onChange={(e) => setNewVitals({ ...newVitals, pulse: e.target.value })}
+                      className="w-full rounded-xl border border-outline-variant bg-background p-2 text-xs outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant mb-1">SpO2 (%)</label>
+                    <input
+                      type="text"
+                      placeholder="98"
+                      value={newVitals.spo2}
+                      onChange={(e) => setNewVitals({ ...newVitals, spo2: e.target.value })}
+                      className="w-full rounded-xl border border-outline-variant bg-background p-2 text-xs outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant mb-1">Temp (°F / °C)</label>
+                    <input
+                      type="text"
+                      placeholder="98.6°F"
+                      value={newVitals.temp}
+                      onChange={(e) => setNewVitals({ ...newVitals, temp: e.target.value })}
+                      className="w-full rounded-xl border border-outline-variant bg-background p-2 text-xs outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant mb-1">Weight (kg)</label>
+                    <input
+                      type="text"
+                      placeholder="58"
+                      value={newVitals.weight}
+                      onChange={(e) => setNewVitals({ ...newVitals, weight: e.target.value })}
+                      className="w-full rounded-xl border border-outline-variant bg-background p-2 text-xs outline-none focus:border-indigo-600"
+                    />
+                  </div>
                 </div>
               </div>
 
+              {/* Triage, Department & Doctor */}
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
+                  <label className="block text-xs font-bold text-on-surface mb-1">
                     Triage Urgency
                   </label>
                   <select
                     value={newTriage}
                     onChange={(e) => setNewTriage(e.target.value as UnifiedReferral["triageLevel"])}
-                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-xs font-semibold outline-none focus:border-indigo-600"
                   >
-                    <option value="RED">RED (Immediate Emergency)</option>
-                    <option value="YELLOW">YELLOW (Urgent)</option>
-                    <option value="GREEN">GREEN (Routine)</option>
+                    <option value="RED">RED (Immediate Critical)</option>
+                    <option value="YELLOW">YELLOW (Urgent Priority)</option>
+                    <option value="GREEN">GREEN (Normal / Routine)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                    Specialty Required
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Department / Specialty
                   </label>
                   <input
                     type="text"
                     value={newSpecialty}
                     onChange={(e) => setNewSpecialty(e.target.value)}
-                    placeholder="e.g. Cardiology, Surgery"
-                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                    placeholder="e.g. General OPD, Obstetrics"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-xs outline-none focus:border-indigo-600 font-medium"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                    Ambulance Transport
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Assigned Doctor
                   </label>
-                  <select
-                    value={newTransport}
-                    onChange={(e) => setNewTransport(e.target.value)}
-                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
-                  >
-                    <option value="108 ALS Ambulance">108 ALS Ambulance (Critical)</option>
-                    <option value="108 BLS Ambulance">108 BLS Ambulance</option>
-                    <option value="Hospital Transfer Van">Hospital Transfer Van</option>
-                  </select>
+                  <input
+                    type="text"
+                    value={newDoctor}
+                    onChange={(e) => setNewDoctor(e.target.value)}
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-xs outline-none focus:border-indigo-600 font-medium"
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                  Clinical Summary & Escalation Justification
-                </label>
-                <textarea
-                  rows={3}
-                  value={newReason}
-                  onChange={(e) => setNewReason(e.target.value)}
-                  placeholder="Clinical presentation, vitals, failed conservative stabilization, and required tertiary intervention..."
-                  className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-sm outline-none focus:border-indigo-600"
-                />
-              </div>
+              {/* Conditional Escalation Fields */}
+              {newDisposition === "ESCALATE_DISTRICT" && (
+                <div className="grid gap-4 sm:grid-cols-2 rounded-2xl border border-red-200 bg-red-50/50 p-4">
+                  <div>
+                    <label className="block text-xs font-bold text-red-950 mb-1">
+                      Destination Regional Hospital *
+                    </label>
+                    <select
+                      value={newToFacility}
+                      onChange={(e) => setNewToFacility(e.target.value)}
+                      className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs outline-none focus:border-red-600 font-semibold"
+                    >
+                      <option value="Diamond Harbour DH">Diamond Harbour DH</option>
+                      <option value="Regional Medical College & Tertiary Hospital">Regional Medical College & Tertiary Hospital</option>
+                      <option value="Regional Mother & Child Speciality Hospital">Regional Mother & Child Speciality Hospital</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-red-950 mb-1">
+                      Ambulance Transport Arrangement
+                    </label>
+                    <select
+                      value={newTransport}
+                      onChange={(e) => setNewTransport(e.target.value)}
+                      className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs outline-none focus:border-red-600 font-semibold"
+                    >
+                      <option value="108 ALS Ambulance">108 ALS Ambulance (Critical)</option>
+                      <option value="108 BLS Ambulance">108 BLS Ambulance</option>
+                      <option value="Hospital Transfer Van">Hospital Transfer Van</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-3 border-t border-outline-variant">
                 <button
                   type="button"
                   onClick={() => setIsNewModalOpen(false)}
-                  className="rounded-xl border border-outline-variant px-5 py-2.5 text-sm font-semibold text-on-surface-variant hover:bg-surface-container"
+                  className="rounded-xl border border-outline-variant px-4 py-2 text-xs font-bold text-on-surface-variant hover:bg-surface-container"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-indigo-700 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-800"
+                  className={`rounded-xl px-5 py-2 text-xs font-bold text-white shadow-sm transition ${
+                    newDisposition === "ESCALATE_DISTRICT"
+                      ? "bg-red-700 hover:bg-red-800"
+                      : "bg-indigo-700 hover:bg-indigo-800"
+                  }`}
                 >
-                  Submit Referral To Regional Hospital
+                  {newDisposition === "ESCALATE_DISTRICT"
+                    ? "Escalate to Regional Hospital"
+                    : "Register & Admit at CHC"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MODAL: TERMINATED FROM HOSPITAL (CHC DISCHARGE)
+      ========================================================= */}
+      {terminateModalOpen && selectedReferralToTerminate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-surface p-6 shadow-2xl border border-outline-variant">
+            <div className="flex items-center justify-between border-b border-outline-variant pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                  <span className="material-symbols-outlined text-2xl">task_alt</span>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-on-surface">Terminated from Hospital (Treated & Discharged)</h2>
+                  <p className="text-xs text-on-surface-variant">
+                    Patient: {selectedReferralToTerminate.patientName} ({selectedReferralToTerminate.patientId})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTerminateModalOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmTerminate} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-on-surface mb-1">
+                  Discharge Disposition / Care State
+                </label>
+                <select
+                  value={terminateStatus}
+                  onChange={(e) => setTerminateStatus(e.target.value as UnifiedReferral["status"])}
+                  className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2 text-xs outline-none focus:border-primary font-semibold"
+                >
+                  <option value="Completed">Completed (Treated & Full Recovery)</option>
+                  <option value="Back-Referred">Back-Referred (Discharged for Village ASHA Follow-up)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-on-surface mb-1">
+                  Clinical Discharge Summary & Treatment Provided
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={terminateNotes}
+                  onChange={(e) => setTerminateNotes(e.target.value)}
+                  placeholder="Details of care provided, medication administered, and recovery status..."
+                  className="w-full rounded-xl border border-outline-variant bg-surface-container-low p-3 text-xs outline-none focus:border-primary leading-relaxed"
+                />
+              </div>
+
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3 text-emerald-900">
+                <p className="font-bold flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base text-emerald-700">info</span>
+                  <span>ASHA Notification:</span>
+                </p>
+                <p className="mt-1 text-[11px] text-emerald-800">
+                  This action marks the patient as stabilized/terminated from CHC care and issues a back-referral status to the referring village ASHA for home follow-up.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-outline-variant">
+                <button
+                  type="button"
+                  onClick={() => setTerminateModalOpen(false)}
+                  className="rounded-xl border border-outline-variant px-4 py-2 text-xs font-bold text-on-surface-variant hover:bg-surface-container"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-emerald-700 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-800"
+                >
+                  Confirm Discharge / Termination
                 </button>
               </div>
             </form>

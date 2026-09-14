@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { DashboardSidebar } from "@/components/common/DashboardSidebar";
 import { PortalHeader } from "@/components/common/PortalHeader";
@@ -7,6 +7,11 @@ import { useReferralStore, type UnifiedReferral } from "@/sync/referralStore";
 import { DistrictOfficeAuthModal } from "@/components/referral/DistrictOfficeAuthModal";
 import { useLanguageStore } from "@/i18n/useLanguageStore";
 import { queueBackReferralOfflineFirst, queueReferralTransitionOfflineFirst, referralApi } from "@/api/referralApi";
+
+interface FacilityCount {
+  facility: string;
+  count: number;
+}
 
 export function DistrictOfficePage() {
   const { isDistrictOfficerAuthenticated, districtOfficerUser, logoutDistrictOfficer } = useReferralAuth();
@@ -46,8 +51,10 @@ export function DistrictOfficePage() {
     };
   }, []);
 
+  const [selectedReferringFacility, setSelectedReferringFacility] = useState<string>("ALL");
+
   // District-relevant cases: escalated, in consultation, or back-referred
-  const districtCases = (referrals || []).filter(
+  const districtCases: UnifiedReferral[] = (referrals || []).filter(
     (r) =>
       r.targetLevel === "DISTRICT_OFFICE" ||
       r.status === "Escalated to District" ||
@@ -55,6 +62,23 @@ export function DistrictOfficePage() {
       r.status === "Back-Referred" ||
       r.priority === "Emergency"
   );
+
+  const facilityBreakdown = useMemo<FacilityCount[]>(() => {
+    const map = new Map<string, number>();
+    districtCases.forEach((c) => {
+      const fac = c.fromFacilityOrWorker || c.block || "Unknown Facility";
+      map.set(fac, (map.get(fac) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([facility, count]) => ({ facility, count }));
+  }, [districtCases]);
+
+  const filteredDistrictCases = useMemo<UnifiedReferral[]>(() => {
+    if (selectedReferringFacility === "ALL") return districtCases;
+    return districtCases.filter((c) => {
+      const fac = c.fromFacilityOrWorker || c.block || "Unknown Facility";
+      return fac === selectedReferringFacility;
+    });
+  }, [districtCases, selectedReferringFacility]);
 
   const totalCases = districtCases.length;
   const emergencyCount = districtCases.filter((r) => r.priority === "Emergency" || r.triageLevel === "RED").length;
@@ -346,7 +370,7 @@ export function DistrictOfficePage() {
 
               {/* OPERATIONAL DISTRICT REFERRAL QUEUE & ACTIONS */}
               <section className="rounded-3xl border border-purple-200 bg-surface p-6 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                   <div>
                     <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
                       <span className="material-symbols-outlined text-purple-700">emergency_heat</span>
@@ -364,15 +388,81 @@ export function DistrictOfficePage() {
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-900 bg-purple-100 px-3 py-1 rounded-full">
-                      {districtCases.length} Active Cases
+                      {filteredDistrictCases.length} of {districtCases.length} Cases
                     </span>
                   </div>
                 </div>
 
-                {districtCases.length === 0 ? (
+                {/* MULTI-CHC REFERRAL AGGREGATION & FACILITY FILTER BAR */}
+                <div className="mb-5 rounded-2xl border border-purple-100 bg-purple-50/40 p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-purple-700 text-lg">filter_alt</span>
+                    <label htmlFor="chc-filter-select" className="text-xs font-bold text-purple-950">
+                      Referring CHC Facility:
+                    </label>
+                    <select
+                      id="chc-filter-select"
+                      value={selectedReferringFacility}
+                      onChange={(e) => setSelectedReferringFacility(e.target.value)}
+                      className="rounded-xl border border-purple-200 bg-surface px-3 py-1.5 text-xs font-bold text-purple-950 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-2xs"
+                    >
+                      <option value="ALL">All Referring CHC Facilities ({totalCases})</option>
+                      {facilityBreakdown.map((item) => (
+                        <option key={item.facility} value={item.facility}>
+                          {item.facility} ({item.count} {item.count === 1 ? "case" : "cases"})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Quick Clickable Facility Badges */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedReferringFacility("ALL")}
+                      className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                        selectedReferringFacility === "ALL"
+                          ? "bg-purple-700 text-white shadow-2xs"
+                          : "bg-surface border border-purple-200 text-purple-900 hover:bg-purple-100"
+                      }`}
+                    >
+                      All Facilities
+                    </button>
+                    {facilityBreakdown.map((item) => (
+                      <button
+                        key={item.facility}
+                        type="button"
+                        onClick={() => setSelectedReferringFacility(item.facility)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition flex items-center gap-1 ${
+                          selectedReferringFacility === item.facility
+                            ? "bg-purple-700 text-white shadow-2xs"
+                            : "bg-surface border border-purple-200 text-purple-900 hover:bg-purple-100"
+                        }`}
+                      >
+                        <span>{item.facility}</span>
+                        <span className="rounded-full bg-purple-200/80 text-purple-950 px-1.5 py-0.2 text-[10px]">
+                          {item.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {filteredDistrictCases.length === 0 ? (
                   <div className="text-center py-10 border border-dashed border-outline-variant rounded-2xl">
                     <span className="material-symbols-outlined text-4xl text-slate-400">check_circle</span>
-                    <p className="mt-2 text-sm font-semibold text-on-surface-variant">No active escalated cases in district queue</p>
+                    <p className="mt-2 text-sm font-semibold text-on-surface-variant">
+                      No active escalated cases in district queue for {selectedReferringFacility === "ALL" ? "any facility" : selectedReferringFacility}
+                    </p>
+                    {selectedReferringFacility !== "ALL" && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReferringFacility("ALL")}
+                        className="mt-3 text-xs font-bold text-purple-700 underline"
+                      >
+                        Reset to show all facilities
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -388,7 +478,7 @@ export function DistrictOfficePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline-variant/40">
-                        {districtCases.map((c) => (
+                        {filteredDistrictCases.map((c) => (
                           <tr key={c.id} className="hover:bg-purple-50/30 transition">
                             <td className="py-3.5 px-3">
                               <div className="font-bold text-on-surface">{c.patientName}</div>

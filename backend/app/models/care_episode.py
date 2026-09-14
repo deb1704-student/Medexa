@@ -4,7 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
 from app.core.database import Base
-from app.models.mixins import UUIDPrimaryKeyMixin, TimestampMixin
+from app.models.mixins import UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin
 
 
 class CareEpisodeStatus(str, enum.Enum):
@@ -12,7 +12,7 @@ class CareEpisodeStatus(str, enum.Enum):
     CLOSED = "closed"
 
 
-class CareEpisode(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+class CareEpisode(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """
     THE root domain entity (Build Guide Section 2). Every clinical record
     — Encounter, TriageAssessment, Referral, Observation — has a foreign

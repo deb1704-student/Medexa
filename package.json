@@ -2,6 +2,7 @@
   "name": "medexa-workspace",
   "private": true,
   "scripts": {
+    "dev:all": "powershell -ExecutionPolicy Bypass -File ./scripts/start-all.ps1",
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "preview": "npm --prefix frontend run preview",

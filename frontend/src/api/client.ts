@@ -11,7 +11,7 @@
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
     this.name = "ApiError";
@@ -68,5 +68,3 @@ export const apiClient = {
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   delete: <T>(path: string) => request<T>("DELETE", path),
 };
-
-export { ApiError };

@@ -86,6 +86,25 @@ const PORTAL_CONFIGS: Record<Role, PortalConfig> = {
     demoName: "Dr. A. Sen",
     demoLocation: "South 24 Parganas District General Hospital",
   },
+  ADMIN: {
+    role: "ADMIN",
+    title: "System Administrator Login",
+    subtitle: "State Health Systems Audit & Retention Command",
+    tierBadge: "State HQ Tier • System Admin",
+    gateBadge: "Administrator Credential Gate",
+    icon: "admin_panel_settings",
+    themeColor: "amber",
+    buttonClass: "bg-slate-800 hover:bg-slate-900 text-white shadow-md hover:shadow-lg",
+    badgeClass: "bg-slate-100 text-slate-800 border-slate-300",
+    iconBgClass: "bg-slate-700/15 text-slate-800",
+    focusClass: "focus:border-slate-800 focus:ring-slate-800/20",
+    placeholderId: "e.g. ADMIN-WB-001",
+    targetDashboard: "/dashboard",
+    demoId: "ADMIN-WB-001",
+    demoPin: "9999",
+    demoName: "System Administrator",
+    demoLocation: "Swasthya Bhawan / State HQ",
+  },
 };
 
 function resolveRole(propRole?: Role, paramRole?: string): Role {
@@ -94,6 +113,7 @@ function resolveRole(propRole?: Role, paramRole?: string): Role {
   if (p === "asha" || p === "village") return "ASHA";
   if (p === "block" || p === "phc" || p === "chc" || p === "rural") return "BLOCK";
   if (p === "district" || p === "cmoh" || p === "dh") return "DISTRICT";
+  if (p === "admin") return "ADMIN";
   return "ASHA";
 }
 

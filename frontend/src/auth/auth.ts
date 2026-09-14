@@ -139,6 +139,19 @@ export const HEALTH_REGISTRY_DATABASE: Record<string, RegisteredCredential> = {
     designation: "District Hospital Medical Superintendent",
     phone: "+91 94341 98763",
   },
+  "ADMIN-WB-001": {
+    id: "ADMIN-WB-001",
+    name: "System Administrator",
+    role: "ADMIN",
+    pin: "9999",
+    state: "West Bengal",
+    district: "State HQ",
+    block: "State Health Dept",
+    village: "Kolkata",
+    facilityOrVillage: "Swasthya Bhawan",
+    designation: "State Health Systems Administrator",
+    phone: "+91 94340 00001",
+  },
 };
 
 const SESSION_STORAGE_KEY = "medexa_auth_session_v4";
@@ -149,10 +162,10 @@ const SESSION_STORAGE_KEY = "medexa_auth_session_v4";
  * ARCHITECTURAL DESIGN NOTE:
  * The frontend provides ~10 rich frontline worker personas (ASHA, Block MOIC, CMOH)
  * with local administrative context (village, block, facility, designation, phone) for realistic UI demonstration.
- * The FastAPI backend enforces RBAC using standard roles (UserRole: asha_worker, doctor, district_officer).
+ * The FastAPI backend enforces RBAC using standard roles (UserRole: asha_worker, doctor, district_officer, admin).
  *
  * In this architecture, all ASHA personas map to the backend's seeded ASHA account (asha.demo),
- * Block officers map to doctor.demo, and District officers map to officer.demo.
+ * Block officers map to doctor.demo, District officers map to officer.demo, and Admins to admin.demo.
  * When a user logs in with their persona PIN, we authenticate locally and immediately
  * request a real JWT from POST /auth/login using the configured API base URL, saving it to localStorage ("auth_token").
  * This ensures every subsequent API request carries a valid backend bearer token with the correct RBAC role.
@@ -164,6 +177,7 @@ export const ROLE_TO_BACKEND_ACCOUNT: Record<
   ASHA: { username: "asha.demo", password: "demo1234" },
   BLOCK: { username: "doctor.demo", password: "demo1234" },
   DISTRICT: { username: "officer.demo", password: "demo1234" },
+  ADMIN: { username: "admin.demo", password: "demo1234" },
 };
 
 export async function syncBackendJwt(role: Role): Promise<string | null> {

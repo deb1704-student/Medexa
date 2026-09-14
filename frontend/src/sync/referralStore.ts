@@ -27,6 +27,7 @@ export interface UnifiedReferral {
   lastAction: string;
   clinicalNotes: string;
   escortTransport: string;
+  createdAt?: string;
 }
 
 export function sanitizeReferral(
@@ -58,13 +59,37 @@ export function sanitizeReferral(
     lastAction: String(safe.lastAction || safe.lastUpdate || "Referral registered"),
     clinicalNotes: String(safe.clinicalNotes || safe.reason || safe.notes || "Clinical evaluation requested"),
     escortTransport: String(safe.escortTransport || "Accompanied by ASHA"),
+    createdAt: safe.createdAt ? String(safe.createdAt) : undefined,
   };
 }
 
+const LOCAL_STORAGE_KEY = "medexa_unified_referrals_v5";
+
 function loadSavedReferrals(): UnifiedReferral[] {
-  // This store is a view/cache layer only. Canonical operational data lives
-  // in FastAPI/PostgreSQL and is mirrored locally by the API/Dexie path.
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((r) => sanitizeReferral(r));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("referralStore: Could not load saved referrals from localStorage:", err);
+  }
   return [];
+}
+
+function persistReferrals(referrals: UnifiedReferral[]): void {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(referrals));
+    }
+  } catch (err) {
+    console.warn("referralStore: Could not persist referrals to localStorage:", err);
+  }
 }
 
 export type ViewerRole = "asha" | "block_officer" | "district_officer" | "public";
@@ -77,11 +102,35 @@ export interface PublicReferralView extends UnifiedReferral {
   ashaActionAlert?: string;
 }
 
+function deduplicateNotes(notes: string): string {
+  if (!notes) return "";
+  const trimmed = notes.trim();
+  // 1. Check if identical halves are concatenated together
+  const halfLen = Math.floor(trimmed.length / 2);
+  const firstHalf = trimmed.slice(0, halfLen).trim();
+  const secondHalf = trimmed.slice(halfLen).trim();
+  if (firstHalf.length > 15 && (firstHalf === secondHalf || secondHalf.startsWith(firstHalf))) {
+    return firstHalf;
+  }
+  // 2. Check for repeated consecutive or duplicate sentences
+  const sentences = trimmed.split(/(?<=[.!?])\s+/);
+  const seen = new Set<string>();
+  const uniqueSentences: string[] = [];
+  for (const s of sentences) {
+    const norm = s.trim().toLowerCase();
+    if (norm && !seen.has(norm)) {
+      seen.add(norm);
+      uniqueSentences.push(s.trim());
+    }
+  }
+  return uniqueSentences.length > 0 ? uniqueSentences.join(" ") : trimmed;
+}
+
 export function getPublicStatus(referral: UnifiedReferral, viewerRole: ViewerRole): PublicReferralView {
   let displayStatus: string = referral.status;
   let displayDoctor: string = referral.assignedDoctor;
   const displayFacility: string = referral.toFacility;
-  let displayNotes: string = referral.clinicalNotes;
+  let displayNotes: string = deduplicateNotes(referral.clinicalNotes || "");
   let ashaActionAlert: string | undefined;
 
   if (viewerRole === "asha" || viewerRole === "public") {
@@ -204,9 +253,11 @@ interface ReferralStoreState {
   fetchReferrals: () => Promise<UnifiedReferral[]>;
   addAshaReferral: (referral: Omit<UnifiedReferral, "id" | "sourceLevel" | "targetLevel" | "referralDate" | "lastAction">) => UnifiedReferral;
   addBlockReferral: (referral: Omit<UnifiedReferral, "id" | "sourceLevel" | "targetLevel" | "referralDate" | "lastAction">) => UnifiedReferral;
+  softDeleteReferral: (id: string, force?: boolean) => Promise<boolean>;
   escalateToDistrict: (id: string, hospital: string, doctor: string, transport: string, notes: string) => void;
   admitDistrictPatient: (id: string, doctor: string, ward: string, clinicalUpdate: string) => void;
   backReferPatient: (id: string, instructions: string, followUpDays: number) => void;
+  terminateOrDischargePatient: (id: string, notes: string, status?: UnifiedReferral["status"]) => void;
   loadCustomDataset: (dataset: UnifiedReferral[]) => void;
   clearAllReferrals: () => void;
   resetToDefault: () => void;
@@ -226,54 +277,54 @@ export const useReferralStore = create<ReferralStoreState>((set, get) => ({
   fetchReferrals: async () => {
     try {
       const data = await referralApi.listReferrals();
-      if (Array.isArray(data)) {
-        set({ referrals: data });
-        return data;
+      if (Array.isArray(data) && data.length > 0) {
+        const existing = get().referrals;
+        const map = new Map<string, UnifiedReferral>();
+        for (const item of existing) {
+          map.set(item.id, item);
+        }
+        for (const item of data) {
+          map.set(item.id, item);
+        }
+        const merged = Array.from(map.values());
+        set({ referrals: merged });
+        persistReferrals(merged);
+        return merged;
       }
       return get().referrals;
     } catch (err) {
-      console.warn("referralStore: fetchReferrals failed:", err);
+      console.warn("referralStore: fetchReferrals failed, retaining cached referrals:", err);
       return get().referrals;
     }
   },
 
   addAshaReferral: (data) => {
     const newRecord = sanitizeReferral(data);
-    set((state) => ({ referrals: [newRecord, ...state.referrals.filter((r) => r.id !== newRecord.id)] }));
-
-    // Persist real backend record asynchronously
-    const createdBy = useAuthStore.getState().user?.id || "ASHA-WB-401";
-    referralApi
-      .createReferral({
-        id: newRecord.id,
-        reason: newRecord.clinicalNotes || newRecord.category,
-        priority: newRecord.priority === "Emergency" ? "CRITICAL" : newRecord.priority === "High" ? "HIGH" : "MEDIUM",
-        createdBy,
-      })
-      .catch((err) => {
-        console.warn("Offline fallback for addAshaReferral:", err);
-      });
-
+    const updated = [newRecord, ...get().referrals.filter((r) => r.id !== newRecord.id)];
+    set({ referrals: updated });
+    persistReferrals(updated);
     return newRecord;
   },
 
   addBlockReferral: (data) => {
     const newRecord = sanitizeReferral(data);
-    set((state) => ({ referrals: [newRecord, ...state.referrals.filter((r) => r.id !== newRecord.id)] }));
-
-    const createdBy = useAuthStore.getState().user?.id || "BHO-WB-204";
-    referralApi
-      .createReferral({
-        id: newRecord.id,
-        reason: newRecord.clinicalNotes || newRecord.category,
-        priority: newRecord.priority === "Emergency" ? "CRITICAL" : newRecord.priority === "High" ? "HIGH" : "MEDIUM",
-        createdBy,
-      })
-      .catch((err) => {
-        console.warn("Offline fallback for addBlockReferral:", err);
-      });
-
+    const updated = [newRecord, ...get().referrals.filter((r) => r.id !== newRecord.id)];
+    set({ referrals: updated });
+    persistReferrals(updated);
     return newRecord;
+  },
+
+  softDeleteReferral: async (id: string, force = false): Promise<boolean> => {
+    try {
+      await referralApi.deleteReferral(id, force);
+      const filtered = get().referrals.filter((r) => r.id !== id);
+      set({ referrals: filtered });
+      persistReferrals(filtered);
+      return true;
+    } catch (err) {
+      console.warn("softDeleteReferral failed:", err);
+      return false;
+    }
   },
 
   escalateToDistrict: (id, hospital, doctor, transport, notes) => {
@@ -293,6 +344,7 @@ export const useReferralStore = create<ReferralStoreState>((set, get) => ({
         }
         return item;
       });
+      persistReferrals(updated);
       return { referrals: updated };
     });
 
@@ -326,6 +378,7 @@ export const useReferralStore = create<ReferralStoreState>((set, get) => ({
         }
         return item;
       });
+      persistReferrals(updated);
       return { referrals: updated };
     });
 
@@ -355,6 +408,7 @@ export const useReferralStore = create<ReferralStoreState>((set, get) => ({
         }
         return item;
       });
+      persistReferrals(updated);
       return { referrals: updated };
     });
 
@@ -377,16 +431,57 @@ export const useReferralStore = create<ReferralStoreState>((set, get) => ({
       });
   },
 
+  terminateOrDischargePatient: (id, notes, status = "Completed") => {
+    set((state) => {
+      const updated = state.referrals.map((item) => {
+        if (item.id === id) {
+          return sanitizeReferral({
+            ...item,
+            status,
+            lastAction: `Terminated from CHC / Discharged: ${notes || "Care episode stabilized"}`,
+            clinicalNotes: `${item.clinicalNotes} [Discharge: ${notes}]`,
+          });
+        }
+        return item;
+      });
+      persistReferrals(updated);
+      return { referrals: updated };
+    });
+
+    const recordedBy = useAuthStore.getState().user?.id || "demo-doctor-001";
+    referralApi
+      .createBackReferral({
+        referralId: id,
+        outcome: notes || "Patient treated and discharged from CHC",
+        instructions: "Verify medication compliance and routine vitals.",
+        recordedBy,
+      })
+      .catch((err) => {
+        console.warn("Offline fallback for terminateOrDischargePatient back-referral:", err);
+        queueBackReferralOfflineFirst({
+          referralId: id,
+          careEpisodeId: id,
+          instructions: notes || "Discharged from CHC",
+          recordedBy,
+        }).catch(() => {});
+      });
+  },
+
   loadCustomDataset: (dataset) => {
     const sanitized = dataset.map((r) => sanitizeReferral(r));
     set({ referrals: sanitized });
+    persistReferrals(sanitized);
   },
 
   clearAllReferrals: () => {
     set({ referrals: [] });
+    persistReferrals([]);
   },
 
-  resetToDefault: () => { set({ referrals: [] }); },
+  resetToDefault: () => {
+    set({ referrals: [] });
+    persistReferrals([]);
+  },
 }));
 
 /**
@@ -400,25 +495,32 @@ export function useScopedReferrals(): UnifiedReferral[] {
   return useMemo(() => {
     if (!user) return [];
 
+    if (user.role === "ADMIN") {
+      return referrals;
+    }
+
     if (user.role === "ASHA") {
       const workerVillage = user.village?.trim().toLowerCase() || "";
       const workerId = user.id.toLowerCase();
       const workerName = user.name.toLowerCase();
+      const userFacility = (user.facilityOrVillage || "").toLowerCase();
 
       return referrals.filter((r) => {
         const matchesVillage = Boolean(workerVillage && r.village && r.village.toLowerCase().includes(workerVillage));
         const matchesWorker = Boolean(
           (r.fromFacilityOrWorker && r.fromFacilityOrWorker.toLowerCase().includes(workerId)) ||
-          (r.fromFacilityOrWorker && r.fromFacilityOrWorker.toLowerCase().includes(workerName))
+          (r.fromFacilityOrWorker && r.fromFacilityOrWorker.toLowerCase().includes(workerName)) ||
+          (userFacility && r.fromFacilityOrWorker && r.fromFacilityOrWorker.toLowerCase().includes(userFacility)) ||
+          (r.fromFacilityId && user.facility && r.fromFacilityId === user.facility)
         );
-        const isBackReferred = r.status === "Back-Referred" && matchesVillage;
+        const isBackReferred = r.status === "Back-Referred" && (matchesVillage || matchesWorker);
         return matchesVillage || matchesWorker || isBackReferred;
       });
     }
 
     if (user.role === "BLOCK") {
       const blockName = user.block?.trim().toLowerCase() || "";
-      const facilityId = user.facility || "";
+      const facilityId = user.facility || "MED-WB-FAC-000003";
       const facilityName = user.facilityOrVillage?.trim().toLowerCase() || "";
 
       return referrals.filter((r) => {
@@ -430,7 +532,7 @@ export function useScopedReferrals(): UnifiedReferral[] {
             (r.fromFacilityOrWorker && r.fromFacilityOrWorker.toLowerCase().includes(facilityName))
           )
         );
-        const isBlockLevel = r.targetLevel === "BLOCK_OFFICE" || r.sourceLevel === "BLOCK";
+        const isBlockLevel = r.targetLevel === "BLOCK_OFFICE" || r.sourceLevel === "BLOCK" || r.status === "Referred to Block" || r.status === "At Block Office";
         return matchesFacilityId || matchesBlock || matchesFacilityName || isBlockLevel;
       });
     }

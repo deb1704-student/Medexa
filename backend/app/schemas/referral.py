@@ -58,6 +58,7 @@ class ReferralOut(BaseModel):
     sla: ReferralSlaOut | None = None
     rescue_actions: list[ReferralRescueActionOut] = Field(default_factory=list)
     back_referral: BackReferralOut | None = None
+    deleted_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

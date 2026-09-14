@@ -56,7 +56,7 @@ async def get_care_episode(episode_id: str, db: AsyncSession = Depends(get_db)):
     """
     result = await db.execute(
         select(CareEpisode)
-        .where(CareEpisode.id == episode_id)
+        .where(CareEpisode.id == episode_id, CareEpisode.deleted_at.is_(None))
         .options(
             selectinload(CareEpisode.triage_assessments),
             selectinload(CareEpisode.referrals),
@@ -74,7 +74,7 @@ async def get_care_episode(episode_id: str, db: AsyncSession = Depends(get_db)):
 async def list_patient_episodes(patient_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(CareEpisode)
-        .where(CareEpisode.patient_id == patient_id)
+        .where(CareEpisode.patient_id == patient_id, CareEpisode.deleted_at.is_(None))
         .order_by(CareEpisode.opened_at.desc())
     )
     return list(result.scalars().all())

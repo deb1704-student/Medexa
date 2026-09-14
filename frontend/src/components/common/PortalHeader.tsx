@@ -14,6 +14,7 @@ interface PortalHeaderProps {
   onOpenAuth?: () => void;
   allReferralsPath?: string;
   actionButton?: React.ReactNode;
+  showNotificationsBell?: boolean;
 }
 
 export function PortalHeader({
@@ -26,6 +27,7 @@ export function PortalHeader({
   onOpenAuth,
   allReferralsPath = "/",
   actionButton,
+  showNotificationsBell = true,
 }: PortalHeaderProps) {
   const { isOnline, isSyncing, queuedChangesCount, toggleConnectivity, triggerManualSync } =
     useConnectivityStore();
@@ -163,7 +165,7 @@ export function PortalHeader({
           <LanguageSelector />
 
           {/* Role Scoped Notifications Bell */}
-          <NotificationsBell role={themeStyles.role} />
+          {showNotificationsBell && <NotificationsBell role={themeStyles.role} />}
 
           {actionButton}
 

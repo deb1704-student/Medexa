@@ -24,6 +24,7 @@ class PatientCreate(BaseModel):
 
 
 class PatientOut(PatientCreate):
+    deleted_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -42,3 +43,4 @@ class CareEpisodeOut(BaseModel):
     status: CareEpisodeStatus
     opened_at: datetime
     closed_at: datetime | None = None
+    deleted_at: datetime | None = None

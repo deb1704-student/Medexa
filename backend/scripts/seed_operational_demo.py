@@ -117,13 +117,26 @@ async def seed():
                 full_name="Anita Sharma (District Health Officer)", role=UserRole.DISTRICT_OFFICER,
                 facility_id=DEMO_OFFICER_FACILITY_ID,
             ),
+            User(
+                id="demo-admin-001", username="admin.demo",
+                hashed_password=hash_password("demo1234"),
+                full_name="System Administrator", role=UserRole.ADMIN,
+                facility_id=None,
+            ),
         ]
         for u in users:
-            existing = await db.get(User, u.id)
-            if existing is None:
+            stmt = select(User).where((User.username == u.username) | (User.id == u.id))
+            res = await db.execute(stmt)
+            existing = res.scalar_one_or_none()
+            if existing is not None:
+                existing.full_name = u.full_name
+                existing.hashed_password = u.hashed_password
+                existing.role = u.role
+                existing.facility_id = u.facility_id
+            else:
                 db.add(u)
         await db.flush()
-        print("Seeded 3 demo users tied to REAL facilities (asha.demo / doctor.demo / officer.demo, password: demo1234)")
+        print("Seeded demo users tied to REAL facilities (asha.demo / doctor.demo / officer.demo / admin.demo, password: demo1234)")
 
         patients = _read_csv("medexa_synthetic_patients.csv")
         for row in patients:

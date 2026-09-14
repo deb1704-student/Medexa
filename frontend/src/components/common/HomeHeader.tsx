@@ -39,28 +39,6 @@ export function HomeHeader() {
             <BrandMark showSubtitle={true} />
           </Link>
 
-          {/* DESKTOP NAVIGATION */}
-          <nav className="hidden md:flex items-center gap-2">
-            <Link
-              to="/"
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                location.pathname === "/"
-                  ? "text-primary font-bold bg-primary/10"
-                  : "text-on-surface-variant hover:text-on-surface hover:bg-slate-100"
-              }`}
-            >
-              {t("header", "home")}
-            </Link>
-
-            <button
-              type="button"
-              onClick={() => setPortalModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-on-surface-variant hover:text-on-surface hover:bg-slate-100 transition"
-            >
-              <span className="material-symbols-outlined text-[18px] text-primary">apps</span>
-              <span>Portals</span>
-            </button>
-          </nav>
 
           {/* HEADER RIGHT CONTROLS */}
           <div className="flex items-center gap-2.5 sm:gap-3">

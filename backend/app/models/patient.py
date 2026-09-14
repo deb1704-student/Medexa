@@ -3,7 +3,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
 from app.core.database import Base
-from app.models.mixins import UUIDPrimaryKeyMixin, TimestampMixin
+from app.models.mixins import UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin
 
 
 class Sex(str, enum.Enum):
@@ -12,7 +12,7 @@ class Sex(str, enum.Enum):
     OTHER = "other"
 
 
-class Patient(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+class Patient(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """FHIR resource: Patient. Field names deliberately mirror FHIR's
     Patient resource shape (Build Guide Section 8 Stage F) — this is what
     lets us say "FHIR-aligned architecture" honestly without claiming

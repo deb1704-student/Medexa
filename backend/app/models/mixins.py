@@ -21,3 +21,14 @@ class UUIDPrimaryKeyMixin:
 
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SoftDeleteMixin:
+    """Soft deletion support: records are never permanently erased in routine operation.
+    Only authorized administrator action can mark deleted_at, and standard operational queries
+    filter out soft-deleted records."""
+
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None, index=True
+    )
+

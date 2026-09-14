@@ -1,4 +1,4 @@
-export type Role = "ASHA" | "BLOCK" | "DISTRICT";
+export type Role = "ASHA" | "BLOCK" | "DISTRICT" | "ADMIN";
 
 export interface AuthUser {
   id: string;

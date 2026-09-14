@@ -16,132 +16,121 @@ export interface DoctorOnDuty {
   facility: string;
 }
 
-function getScopedDoctors(facility: string, role?: string, selectedDateStr?: string): DoctorOnDuty[] {
-  const isDistrict = role === "DISTRICT";
+const DEFAULT_DISTRICT_DOCTORS: DoctorOnDuty[] = [
+  {
+    id: "DOC-D-01",
+    name: "Dr. A. Sen",
+    specialty: "Cardiology & Intensive Care",
+    department: "Tertiary Cardiology",
+    status: "Available",
+    shift: "09:00 AM – 03:00 PM",
+    room: "CCU Specialist Chamber 101",
+    facility: "Diamond Harbour DH",
+  },
+  {
+    id: "DOC-D-02",
+    name: "Dr. S. Chatterjee",
+    specialty: "General & Laparoscopic Surgery",
+    department: "Surgical Services",
+    status: "In Consultation",
+    shift: "08:30 AM – 02:30 PM",
+    room: "OT Complex & OPD 104",
+    facility: "Diamond Harbour DH",
+  },
+  {
+    id: "DOC-D-03",
+    name: "Dr. R. N. Mukherjee",
+    specialty: "Critical Care & Pulmonology",
+    department: "Respiratory & ICU",
+    status: "Available",
+    shift: "09:00 AM – 04:00 PM",
+    room: "ICU Specialist Desk",
+    facility: "Diamond Harbour DH",
+  },
+  {
+    id: "DOC-D-04",
+    name: "Dr. Sunita Bhattacharya",
+    specialty: "Pediatric Neonatology",
+    department: "Pediatrics & SNCU",
+    status: "In Consultation",
+    shift: "09:00 AM – 02:00 PM",
+    room: "SNCU Wing Chamber 2",
+    facility: "Diamond Harbour DH",
+  },
+  {
+    id: "DOC-D-05",
+    name: "Dr. Pradeep Karmakar",
+    specialty: "Orthopedics & Trauma Surgery",
+    department: "Orthopedic Surgery",
+    status: "On Leave",
+    shift: "Approved Leave",
+    room: "Trauma OPD 108",
+    facility: "Diamond Harbour DH",
+  },
+  {
+    id: "DOC-D-06",
+    name: "Dr. Alok Nath",
+    specialty: "Emergency Medicine",
+    department: "108 Triage Command",
+    status: "Off Duty",
+    shift: "02:00 PM – 09:00 PM (Evening)",
+    room: "Emergency Bay 1",
+    facility: "Diamond Harbour DH",
+  },
+];
 
-  // Simulate realistic shift variation based on selected day of week
-  const dateObj = selectedDateStr ? new Date(selectedDateStr) : new Date();
-  const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
-
-  if (isDistrict) {
-    return [
-      {
-        id: "DOC-D-01",
-        name: "Dr. A. Sen",
-        specialty: "Cardiology & Intensive Care",
-        department: "Tertiary Cardiology",
-        status: dayOfWeek === 0 ? "Off Duty" : "Available",
-        shift: "09:00 AM – 03:00 PM",
-        room: "CCU Specialist Chamber 101",
-        facility: facility,
-      },
-      {
-        id: "DOC-D-02",
-        name: "Dr. S. Chatterjee",
-        specialty: "General & Laparoscopic Surgery",
-        department: "Surgical Services",
-        status: dayOfWeek === 1 || dayOfWeek === 4 ? "Available" : "In Consultation",
-        shift: "08:30 AM – 02:30 PM",
-        room: "OT Complex & OPD 104",
-        facility: facility,
-      },
-      {
-        id: "DOC-D-03",
-        name: "Dr. R. N. Mukherjee",
-        specialty: "Critical Care & Pulmonology",
-        department: "Respiratory & ICU",
-        status: "Available",
-        shift: "09:00 AM – 04:00 PM",
-        room: "ICU Specialist Desk",
-        facility: facility,
-      },
-      {
-        id: "DOC-D-04",
-        name: "Dr. Sunita Bhattacharya",
-        specialty: "Pediatric Neonatology",
-        department: "Pediatrics & SNCU",
-        status: "In Consultation",
-        shift: "09:00 AM – 02:00 PM",
-        room: "SNCU Wing Chamber 2",
-        facility: facility,
-      },
-      {
-        id: "DOC-D-05",
-        name: "Dr. Pradeep Karmakar",
-        specialty: "Orthopedics & Trauma Surgery",
-        department: "Orthopedic Surgery",
-        status: dayOfWeek === 6 ? "Available" : "On Leave",
-        shift: dayOfWeek === 6 ? "09:00 AM – 01:00 PM" : "Approved Leave",
-        room: "Trauma OPD 108",
-        facility: facility,
-      },
-      {
-        id: "DOC-D-06",
-        name: "Dr. Alok Nath",
-        specialty: "Emergency Medicine",
-        department: "108 Triage Command",
-        status: "Off Duty",
-        shift: "02:00 PM – 09:00 PM (Evening)",
-        room: "Emergency Bay 1",
-        facility: facility,
-      },
-    ];
-  }
-
-  // CHC / PHC Doctors
-  return [
-    {
-      id: "DOC-B-01",
-      name: "Dr. Anirban Roy",
-      specialty: "General Medicine & Health Admin",
-      department: "CHC Outpatient Department",
-      status: dayOfWeek === 0 ? "Off Duty" : "Available",
-      shift: "09:00 AM – 02:00 PM",
-      room: "MOIC Chamber 1",
-      facility: facility,
-    },
-    {
-      id: "DOC-B-02",
-      name: "Dr. Meera Banik",
-      specialty: "Obstetrics & Gynecology",
-      department: "Maternal & Child Health",
-      status: dayOfWeek === 3 ? "Available" : "In Consultation",
-      shift: "09:00 AM – 02:00 PM",
-      room: "Maternity OPD Room 3",
-      facility: facility,
-    },
-    {
-      id: "DOC-B-03",
-      name: "Dr. Kalyan Mondal",
-      specialty: "Pediatrics & Immunization",
-      department: "Child Wellness Clinic",
-      status: "Available",
-      shift: "10:00 AM – 03:00 PM",
-      room: "Pediatric Clinic Room 4",
-      facility: facility,
-    },
-    {
-      id: "DOC-B-04",
-      name: "Dr. Tapan Samanta",
-      specialty: "General Duty Medical Officer",
-      department: "Inpatient Ward & 108 Triage",
-      status: "Off Duty",
-      shift: "08:00 PM – 08:00 AM (Night)",
-      room: "Inpatient Ward Office",
-      facility: facility,
-    },
-    {
-      id: "DOC-B-05",
-      name: "Dr. Arundhati Das",
-      specialty: "Community Medicine & NCDs",
-      department: "Chronic Care Unit",
-      status: "Available",
-      shift: "09:30 AM – 02:30 PM",
-      room: "NCD Clinic Room 2",
-      facility: facility,
-    },
-  ];
-}
+const DEFAULT_CHC_DOCTORS: DoctorOnDuty[] = [
+  {
+    id: "DOC-B-01",
+    name: "Dr. Anirban Roy",
+    specialty: "General Medicine & Health Admin",
+    department: "CHC Outpatient Department",
+    status: "Available",
+    shift: "09:00 AM – 02:00 PM",
+    room: "MOIC Chamber 1",
+    facility: "Dwariknagar Rural Hospital",
+  },
+  {
+    id: "DOC-B-02",
+    name: "Dr. Meera Banik",
+    specialty: "Obstetrics & Gynecology",
+    department: "Maternal & Child Health",
+    status: "In Consultation",
+    shift: "09:00 AM – 02:00 PM",
+    room: "Maternity OPD Room 3",
+    facility: "Dwariknagar Rural Hospital",
+  },
+  {
+    id: "DOC-B-03",
+    name: "Dr. Kalyan Mondal",
+    specialty: "Pediatrics & Immunization",
+    department: "Child Wellness Clinic",
+    status: "Available",
+    shift: "10:00 AM – 03:00 PM",
+    room: "Pediatric Clinic Room 4",
+    facility: "Dwariknagar Rural Hospital",
+  },
+  {
+    id: "DOC-B-04",
+    name: "Dr. Tapan Samanta",
+    specialty: "General Duty Medical Officer",
+    department: "Inpatient Ward & 108 Triage",
+    status: "Off Duty",
+    shift: "08:00 PM – 08:00 AM (Night)",
+    room: "Inpatient Ward Office",
+    facility: "Dwariknagar Rural Hospital",
+  },
+  {
+    id: "DOC-B-05",
+    name: "Dr. Arundhati Das",
+    specialty: "Community Medicine & NCDs",
+    department: "Chronic Care Unit",
+    status: "Available",
+    shift: "09:30 AM – 02:30 PM",
+    room: "NCD Clinic Room 2",
+    facility: "Dwariknagar Rural Hospital",
+  },
+];
 
 function statusBadge(status: DoctorStatus) {
   switch (status) {
@@ -159,12 +148,11 @@ function statusBadge(status: DoctorStatus) {
 export function DoctorAvailabilityPage() {
   const { user } = useAuth();
   const { tPortal, language } = useLanguageStore();
-  const [filter, setFilter] = useState<string>("ALL");
+  const isDistrict = user?.role === "DISTRICT";
 
-  // Prominent Live Clock state
+  const [filter, setFilter] = useState<string>("ALL");
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Date picker / calendar selection state (defaults to today YYYY-MM-DD)
   const todayStr = useMemo(() => {
     const d = new Date();
     return d.toISOString().split("T")[0];
@@ -188,13 +176,52 @@ export function DoctorAvailabilityPage() {
   const activeFacility = useMemo(() => {
     if (user?.facilityOrVillage) return user.facilityOrVillage;
     if (user?.facility) return user.facility;
-    if (user?.role === "DISTRICT") return "Diamond Harbour DH";
-    return "Dwariknagar Rural Hospital";
-  }, [user]);
+    return isDistrict ? "Diamond Harbour DH" : "Dwariknagar Rural Hospital";
+  }, [user, isDistrict]);
 
-  const doctors = useMemo(() => {
-    return getScopedDoctors(activeFacility, user?.role, selectedDate);
-  }, [activeFacility, user?.role, selectedDate]);
+  const storageKey = useMemo(() => {
+    const rolePrefix = isDistrict ? "DISTRICT" : "CHC";
+    const facilitySlug = activeFacility.replace(/\s+/g, "_").toLowerCase();
+    return `medexa_doctors_${rolePrefix}_${facilitySlug}`;
+  }, [isDistrict, activeFacility]);
+
+  const [doctors, setDoctors] = useState<DoctorOnDuty[]>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // Fallback
+    }
+    const defaults = isDistrict ? DEFAULT_DISTRICT_DOCTORS : DEFAULT_CHC_DOCTORS;
+    return defaults.map((d) => ({ ...d, facility: activeFacility }));
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(doctors));
+    } catch (e) {
+      console.warn("Could not save doctors roster to localStorage:", e);
+    }
+  }, [doctors, storageKey]);
+
+  // Add Doctor Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [docName, setDocName] = useState("");
+  const [docSpecialty, setDocSpecialty] = useState("");
+  const [docDepartment, setDocDepartment] = useState("");
+  const [docShift, setDocShift] = useState("09:00 AM – 03:00 PM");
+  const [docRoom, setDocRoom] = useState("OPD Room 1");
+  const [docStatus, setDocStatus] = useState<DoctorStatus>("Available");
+
+  // Edit Doctor Modal State
+  const [editingDoc, setEditingDoc] = useState<DoctorOnDuty | null>(null);
+  const [editShift, setEditShift] = useState("");
+  const [editRoom, setEditRoom] = useState("");
+  const [editSpecialty, setEditSpecialty] = useState("");
+  const [editStatus, setEditStatus] = useState<DoctorStatus>("Available");
 
   const availableCount = doctors.filter((d) => d.status === "Available").length;
   const inConsultCount = doctors.filter((d) => d.status === "In Consultation").length;
@@ -222,6 +249,68 @@ export function DoctorAvailabilityPage() {
     }
   }, [selectedDate]);
 
+  const handleQuickStatusChange = (id: string, newStatus: DoctorStatus) => {
+    setDoctors((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, status: newStatus } : d))
+    );
+  };
+
+  const handleAddDoctor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docName.trim()) return;
+
+    const newDoc: DoctorOnDuty = {
+      id: `DOC-${isDistrict ? "D" : "B"}-${Date.now().toString().slice(-4)}`,
+      name: docName.trim(),
+      specialty: docSpecialty.trim() || "General Medicine",
+      department: docDepartment.trim() || "Clinical OPD",
+      shift: docShift.trim() || "09:00 AM – 03:00 PM",
+      room: docRoom.trim() || "OPD Chamber",
+      status: docStatus,
+      facility: activeFacility,
+    };
+
+    setDoctors((prev) => [newDoc, ...prev]);
+    setIsAddModalOpen(false);
+    setDocName("");
+    setDocSpecialty("");
+    setDocDepartment("");
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDoc) return;
+
+    setDoctors((prev) =>
+      prev.map((d) =>
+        d.id === editingDoc.id
+          ? {
+              ...d,
+              specialty: editSpecialty.trim() || d.specialty,
+              shift: editShift.trim() || d.shift,
+              room: editRoom.trim() || d.room,
+              status: editStatus,
+            }
+          : d
+      )
+    );
+
+    setEditingDoc(null);
+  };
+
+  const handleDeleteDoctor = (id: string) => {
+    if (window.confirm("Remove this doctor from the roster?")) {
+      setDoctors((prev) => prev.filter((d) => d.id !== id));
+    }
+  };
+
+  const handleResetDefaults = () => {
+    if (window.confirm("Reset doctor duty roster to standard defaults for this facility?")) {
+      const defaults = isDistrict ? DEFAULT_DISTRICT_DOCTORS : DEFAULT_CHC_DOCTORS;
+      setDoctors(defaults.map((d) => ({ ...d, facility: activeFacility })));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardSidebar />
@@ -229,10 +318,10 @@ export function DoctorAvailabilityPage() {
       <main className="min-h-screen md:ml-64">
         {/* HEADER */}
         <header className="border-b border-outline-variant bg-surface px-6 py-6 md:px-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-primary">
-                {user?.role === "DISTRICT" ? "Regional Hospital Duty Command" : "Community Health Centre (CHC) Duty Roster"}
+                {isDistrict ? "Regional Hospital Duty Command" : "Community Health Centre (CHC) Duty Roster"}
               </p>
               <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold text-on-surface">
                 {tPortal("doctorAvailabilityTitle", "Doctor Availability", language)}
@@ -242,14 +331,25 @@ export function DoctorAvailabilityPage() {
               </p>
             </div>
 
-            <div className="self-start sm:self-auto rounded-2xl border border-primary/20 bg-primary/5 px-4 py-2.5">
-              <span className="text-[11px] font-bold text-on-surface-variant block uppercase tracking-wider">
-                Duty Roster Facility
-              </span>
-              <span className="text-xs font-bold text-primary flex items-center gap-1 mt-0.5">
-                <span className="material-symbols-outlined text-sm">local_hospital</span>
-                <span className="truncate max-w-[240px]">{activeFacility}</span>
-              </span>
+            <div className="flex items-center gap-2.5 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={handleResetDefaults}
+                className="inline-flex items-center gap-1 rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs font-semibold text-on-surface-variant hover:bg-surface-container transition"
+                title="Reset roster to default"
+              >
+                <span className="material-symbols-outlined text-sm">restart_alt</span>
+                <span>Reset</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-on-primary shadow-xs hover:bg-primary/90 transition"
+              >
+                <span className="material-symbols-outlined text-base">person_add</span>
+                <span>Add Doctor</span>
+              </button>
             </div>
           </div>
         </header>
@@ -317,9 +417,7 @@ export function DoctorAvailabilityPage() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedDate(tomorrowStr);
-                    }}
+                    onClick={() => setSelectedDate(tomorrowStr)}
                     className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
                       selectedDate === tomorrowStr
                         ? "bg-indigo-700 text-white shadow-xs"
@@ -344,7 +442,7 @@ export function DoctorAvailabilityPage() {
             </div>
           </section>
 
-          {/* KPI CARDS (PRESERVED 3-CARD PATTERN) */}
+          {/* KPI CARDS */}
           <div className="grid gap-5 md:grid-cols-3">
             <div
               onClick={() => setFilter(filter === "Available" ? "ALL" : "Available")}
@@ -448,7 +546,7 @@ export function DoctorAvailabilityPage() {
             </div>
 
             {/* COLUMN HEADERS */}
-            <div className="mb-3 hidden px-5 lg:grid lg:grid-cols-[minmax(220px,1.2fr)_minmax(180px,1.1fr)_160px_160px_140px] lg:items-center lg:gap-5">
+            <div className="mb-3 hidden px-5 lg:grid lg:grid-cols-[minmax(200px,1.2fr)_minmax(180px,1.1fr)_140px_140px_160px_100px] lg:items-center lg:gap-4">
               <div className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">
                 {tPortal("doctorName", "Doctor Name")}
               </div>
@@ -461,91 +559,347 @@ export function DoctorAvailabilityPage() {
               <div className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">
                 {tPortal("shiftHours", "Duty Shift")}
               </div>
-              <div className="text-right text-xs font-bold uppercase tracking-wide text-on-surface-variant">
+              <div className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">
                 {tPortal("status", "Current Status")}
+              </div>
+              <div className="text-right text-xs font-bold uppercase tracking-wide text-on-surface-variant">
+                Actions
               </div>
             </div>
 
             {/* DOCTOR ROWS */}
             <div className="space-y-3">
-              {filteredDoctors.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="rounded-2xl border border-outline-variant p-5 transition hover:shadow-sm hover:border-primary/40 bg-surface-container-lowest"
-                >
-                  <div className="grid items-center gap-4 lg:grid-cols-[minmax(220px,1.2fr)_minmax(180px,1.1fr)_160px_160px_140px]">
-                    {/* DOCTOR NAME */}
-                    <div className="flex items-center gap-3.5">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-bold">
-                        <span className="material-symbols-outlined text-xl">medical_services</span>
+              {filteredDoctors.length === 0 ? (
+                <div className="text-center py-10 border border-dashed border-outline-variant rounded-2xl">
+                  <p className="text-sm font-semibold text-on-surface-variant">
+                    No doctors found for this filter. Click "+ Add Doctor" to schedule one.
+                  </p>
+                </div>
+              ) : (
+                filteredDoctors.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="rounded-2xl border border-outline-variant p-4 sm:p-5 transition hover:shadow-sm hover:border-primary/40 bg-surface-container-lowest"
+                  >
+                    <div className="grid items-center gap-4 lg:grid-cols-[minmax(200px,1.2fr)_minmax(180px,1.1fr)_140px_140px_160px_100px]">
+                      {/* DOCTOR NAME */}
+                      <div className="flex items-center gap-3.5">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-bold">
+                          <span className="material-symbols-outlined text-xl">medical_services</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-on-surface text-sm">
+                            {doc.name}
+                          </p>
+                          <p className="text-[11px] text-on-surface-variant">
+                            Reg ID: {doc.id}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate font-bold text-on-surface text-sm">
-                          {doc.name}
+
+                      {/* SPECIALTY / DEPT */}
+                      <div>
+                        <span className="text-[11px] text-on-surface-variant font-bold lg:hidden mr-1">Specialty:</span>
+                        <p className="text-xs font-bold text-on-surface truncate">
+                          {doc.specialty}
                         </p>
-                        <p className="text-[11px] text-on-surface-variant">
-                          Reg ID: {doc.id}
+                        <p className="text-[11px] text-on-surface-variant truncate">
+                          {doc.department}
                         </p>
                       </div>
-                    </div>
 
-                    {/* SPECIALTY / DEPT */}
-                    <div>
-                      <span className="text-[11px] text-on-surface-variant font-bold lg:hidden mr-1">Specialty:</span>
-                      <p className="text-xs font-bold text-on-surface truncate">
-                        {doc.specialty}
-                      </p>
-                      <p className="text-[11px] text-on-surface-variant truncate">
-                        {doc.department}
-                      </p>
-                    </div>
+                      {/* ROOM */}
+                      <div>
+                        <span className="text-[11px] text-on-surface-variant font-bold lg:hidden mr-1">Room:</span>
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-on-surface">
+                          <span className="material-symbols-outlined text-xs text-on-surface-variant">door_front</span>
+                          <span>{doc.room}</span>
+                        </span>
+                      </div>
 
-                    {/* ROOM */}
-                    <div>
-                      <span className="text-[11px] text-on-surface-variant font-bold lg:hidden mr-1">Room:</span>
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-on-surface">
-                        <span className="material-symbols-outlined text-xs text-on-surface-variant">door_front</span>
-                        <span>{doc.room}</span>
-                      </span>
-                    </div>
+                      {/* SHIFT */}
+                      <div>
+                        <span className="text-[11px] text-on-surface-variant font-bold lg:hidden mr-1">Shift:</span>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-on-surface-variant">
+                          <span className="material-symbols-outlined text-xs">schedule</span>
+                          <span className="truncate">{doc.shift}</span>
+                        </span>
+                      </div>
 
-                    {/* SHIFT */}
-                    <div>
-                      <span className="text-[11px] text-on-surface-variant font-bold lg:hidden mr-1">Shift:</span>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-on-surface-variant">
-                        <span className="material-symbols-outlined text-xs">schedule</span>
-                        <span>{doc.shift}</span>
-                      </span>
-                    </div>
+                      {/* STATUS SELECTOR / BADGE */}
+                      <div>
+                        <span className="text-[11px] text-on-surface-variant font-bold lg:hidden mr-1">Status:</span>
+                        <select
+                          value={doc.status}
+                          onChange={(e) => handleQuickStatusChange(doc.id, e.target.value as DoctorStatus)}
+                          className={`rounded-xl border px-2.5 py-1 text-xs font-bold outline-none cursor-pointer ${statusBadge(
+                            doc.status
+                          )}`}
+                        >
+                          <option value="Available">Available</option>
+                          <option value="In Consultation">In Consultation</option>
+                          <option value="On Leave">On Leave</option>
+                          <option value="Off Duty">Off Duty</option>
+                        </select>
+                      </div>
 
-                    {/* STATUS BADGE */}
-                    <div className="flex items-center lg:justify-end">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${statusBadge(
-                          doc.status
-                        )}`}
-                      >
-                        <span
-                          className={`h-2 w-2 rounded-full ${
-                            doc.status === "Available"
-                              ? "bg-emerald-500 animate-pulse"
-                              : doc.status === "In Consultation"
-                              ? "bg-blue-500"
-                              : doc.status === "On Leave"
-                              ? "bg-amber-500"
-                              : "bg-slate-400"
-                          }`}
-                        />
-                        <span>{doc.status}</span>
-                      </span>
+                      {/* ACTIONS */}
+                      <div className="flex items-center lg:justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingDoc(doc);
+                            setEditSpecialty(doc.specialty);
+                            setEditShift(doc.shift);
+                            setEditRoom(doc.room);
+                            setEditStatus(doc.status);
+                          }}
+                          className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition"
+                          title="Edit doctor details"
+                        >
+                          <span className="material-symbols-outlined text-base">edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDoctor(doc.id)}
+                          className="rounded-lg p-1.5 text-on-surface-variant hover:bg-red-50 hover:text-red-700 transition"
+                          title="Remove doctor from roster"
+                        >
+                          <span className="material-symbols-outlined text-base">delete</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
       </main>
+
+      {/* ADD DOCTOR MODAL */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-outline-variant bg-surface p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/60">
+              <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">person_add</span>
+                <span>Add Doctor to Duty Roster</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="rounded-full p-1 text-on-surface-variant hover:bg-surface-container"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleAddDoctor} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-on-surface mb-1">
+                  Doctor Name (with title) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Dr. Tanmoy Banerjee"
+                  value={docName}
+                  onChange={(e) => setDocName(e.target.value)}
+                  className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Specialty
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Cardiology, Pediatrics"
+                    value={docSpecialty}
+                    onChange={(e) => setDocSpecialty(e.target.value)}
+                    className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Department
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Outpatient Unit"
+                    value={docDepartment}
+                    onChange={(e) => setDocDepartment(e.target.value)}
+                    className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Duty Shift Hours
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 09:00 AM – 03:00 PM"
+                    value={docShift}
+                    onChange={(e) => setDocShift(e.target.value)}
+                    className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Room / Chamber
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. OPD Room 3"
+                    value={docRoom}
+                    onChange={(e) => setDocRoom(e.target.value)}
+                    className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-on-surface mb-1">
+                  Initial Duty Status
+                </label>
+                <select
+                  value={docStatus}
+                  onChange={(e) => setDocStatus(e.target.value as DoctorStatus)}
+                  className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs font-semibold outline-none focus:border-primary"
+                >
+                  <option value="Available">Available</option>
+                  <option value="In Consultation">In Consultation</option>
+                  <option value="On Leave">On Leave</option>
+                  <option value="Off Duty">Off Duty</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-outline-variant/60">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="rounded-xl border border-outline-variant px-4 py-2 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-on-primary shadow-xs hover:bg-primary/90"
+                >
+                  Save to Roster
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT DOCTOR MODAL */}
+      {editingDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-outline-variant bg-surface p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/60">
+              <h3 className="text-base font-bold text-on-surface">
+                Edit Duty Details: {editingDoc.name}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingDoc(null)}
+                className="rounded-full p-1 text-on-surface-variant hover:bg-surface-container"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-on-surface mb-1">
+                  Specialty
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editSpecialty}
+                  onChange={(e) => setEditSpecialty(e.target.value)}
+                  className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Duty Shift Hours
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editShift}
+                    onChange={(e) => setEditShift(e.target.value)}
+                    className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-on-surface mb-1">
+                    Room / Chamber
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editRoom}
+                    onChange={(e) => setEditRoom(e.target.value)}
+                    className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-on-surface mb-1">
+                  Duty Status
+                </label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as DoctorStatus)}
+                  className="w-full rounded-xl border border-outline-variant bg-background px-3 py-2 text-xs font-semibold outline-none focus:border-primary"
+                >
+                  <option value="Available">Available</option>
+                  <option value="In Consultation">In Consultation</option>
+                  <option value="On Leave">On Leave</option>
+                  <option value="Off Duty">Off Duty</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-outline-variant/60">
+                <button
+                  type="button"
+                  onClick={() => setEditingDoc(null)}
+                  className="rounded-xl border border-outline-variant px-4 py-2 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-on-primary shadow-xs hover:bg-primary/90"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

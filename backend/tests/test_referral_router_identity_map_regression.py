@@ -96,3 +96,60 @@ async def test_rescue_action_visible_immediately_after_commit_same_session(db_se
     loaded_after = await _get_referral_with_history(db_session, referral.id)
     assert len(loaded_after.rescue_actions) == 1
     assert loaded_after.rescue_actions[0].reason == "SLA breached for state SENT"
+
+
+async def test_idempotent_transition_and_back_referral(db_session):
+    from app.routers.referrals import _apply_referral_transition, create_back_referral
+    from app.schemas.referral import ReferralTransitionRequest
+    from app.schemas.continuity import BackReferralCreate
+    from app.core.security import TokenPayload
+    from app.models.user import UserRole
+
+    referral = await _make_referral_fixture(db_session)
+    user = TokenPayload(sub="test-worker", role=UserRole.ADMIN, facility_id=referral.to_facility_id)
+
+    # Transition to ACCEPTED
+    payload1 = ReferralTransitionRequest(
+        id=str(uuid.uuid4()),
+        to_state=ReferralState.ACCEPTED,
+        note="First transition",
+    )
+    res1 = await _apply_referral_transition(db_session, referral.id, payload1, user)
+    assert res1.current_state == ReferralState.ACCEPTED
+
+    # Re-apply same state transition (idempotent retry)
+    payload2 = ReferralTransitionRequest(
+        id=str(uuid.uuid4()),
+        to_state=ReferralState.ACCEPTED,
+        note="Retry same transition",
+    )
+    res2 = await _apply_referral_transition(db_session, referral.id, payload2, user)
+    assert res2.current_state == ReferralState.ACCEPTED
+
+    # Create back-referral
+    back1 = await create_back_referral(
+        BackReferralCreate(
+            id=str(uuid.uuid4()),
+            referral_id=referral.id,
+            outcome="Stabilized",
+            recorded_by="test-worker",
+            recorded_at=datetime.now(timezone.utc),
+        ),
+        current_user=user,
+        db=db_session,
+    )
+    assert back1 is not None
+
+    # Idempotent retry of back-referral with different payload id
+    back2 = await create_back_referral(
+        BackReferralCreate(
+            id=str(uuid.uuid4()),
+            referral_id=referral.id,
+            outcome="Stabilized again",
+            recorded_by="test-worker",
+            recorded_at=datetime.now(timezone.utc),
+        ),
+        current_user=user,
+        db=db_session,
+    )
+    assert back2.id == back1.id

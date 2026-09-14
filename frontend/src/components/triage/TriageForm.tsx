@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { z } from "zod";
 import { v4 as uuidv4, validate as uuidValidate } from "uuid";
 import { TriageAssessmentSchema, type ClinicalRiskLevelT } from "@/models/careEpisode";
@@ -14,6 +14,11 @@ interface TriageFormProps {
   careEpisodeId: string;
   workerId: string;
   onSubmitted: (riskLevel: ClinicalRiskLevelT, assessment?: TriageAssessment) => void;
+  initialPatientName?: string;
+  patientNameLocked?: boolean;
+  initialAge?: string | number;
+  initialSex?: string;
+  onPatientData?: (name: string, age: number, sex: string) => void;
 }
 
 const QUICK_SELECT_SYMPTOMS = [
@@ -40,7 +45,33 @@ const VITAL_FIELDS: VitalFieldConfig[] = [
   { key: "tempC", label: "Body Temp", unit: "°C", step: 0.1, normalRange: "36.5–37.5 °C" },
 ];
 
-export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormProps) {
+export function TriageForm({
+  careEpisodeId,
+  workerId,
+  onSubmitted,
+  initialPatientName = "",
+  patientNameLocked = false,
+  initialAge = "",
+  initialSex = "female",
+  onPatientData,
+}: TriageFormProps) {
+  const [patientName, setPatientName] = useState(initialPatientName);
+  const [age, setAge] = useState(initialAge != null ? String(initialAge) : "");
+  const [sex, setSex] = useState(initialSex || "female");
+
+  useEffect(() => {
+    if (initialPatientName !== undefined) setPatientName(initialPatientName);
+  }, [initialPatientName]);
+
+  useEffect(() => {
+    if (initialAge !== undefined && initialAge !== "") setAge(String(initialAge));
+  }, [initialAge]);
+
+  useEffect(() => {
+    if (initialSex !== undefined) setSex(initialSex);
+  }, [initialSex]);
+
+  const [freetextSymptoms, setFreetextSymptoms] = useState("");
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [symptomInput, setSymptomInput] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
@@ -52,29 +83,44 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
     tempC: "",
     spo2: "",
   });
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+
   const [triageResult, setTriageResult] = useState<TriageRiskResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Combined symptoms from freetext and selected chips
+  const allSymptoms = useMemo(() => {
+    const fromChips = [...symptoms];
+    const fromFreetext = freetextSymptoms
+      .split(/[,;\n]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const merged = Array.from(new Set([...fromChips, ...fromFreetext]));
+    return merged;
+  }, [symptoms, freetextSymptoms]);
 
   // Live parsed vitals
-  const parsedVitals = useMemo(() => ({
-    systolicBP: vitals.systolicBP ? Number(vitals.systolicBP) : undefined,
-    diastolicBP: vitals.diastolicBP ? Number(vitals.diastolicBP) : undefined,
-    pulse: vitals.pulse ? Number(vitals.pulse) : undefined,
-    tempC: vitals.tempC ? Number(vitals.tempC) : undefined,
-    spo2: vitals.spo2 ? Number(vitals.spo2) : undefined,
-  }), [vitals]);
+  const parsedVitals = useMemo(() => {
+    const pv: Record<string, number> = {};
+    for (const [k, v] of Object.entries(vitals)) {
+      const num = parseFloat(v);
+      if (!isNaN(num)) pv[k] = num;
+    }
+    return pv;
+  }, [vitals]);
 
   // Live real-time risk assessment
   const liveRisk = useMemo(() => {
-    return calculateTriageRisk(symptoms, parsedVitals);
-  }, [symptoms, parsedVitals]);
+    return calculateTriageRisk(allSymptoms, parsedVitals);
+  }, [allSymptoms, parsedVitals]);
 
   function addSymptom(value: string) {
     const trimmed = value.trim();
     if (trimmed && !symptoms.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
       setSymptoms([...symptoms, trimmed]);
       setSymptomInput("");
+      setFreetextSymptoms((prev) => (prev.trim() ? `${prev.trim()}, ${trimmed}` : trimmed));
     }
   }
 
@@ -94,14 +140,42 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
     setSubmitting(true);
 
     try {
-      const result = calculateTriageRisk(symptoms, parsedVitals);
+      if (!patientNameLocked) {
+        if (!patientName.trim()) {
+          setError("Please enter the patient's full name.");
+          setSubmitting(false);
+          return;
+        }
+        const parsedAge = parseInt(age, 10);
+        if (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 120) {
+          setError("Please enter a valid age between 0 and 120.");
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      if (allSymptoms.length === 0) {
+        setError("Please enter at least one symptom or presenting complaint.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (onPatientData) {
+        onPatientData(
+          patientName.trim() || initialPatientName || "Unknown Patient",
+          parseInt(age, 10) || 0,
+          sex
+        );
+      }
+
+      const result = calculateTriageRisk(allSymptoms, parsedVitals);
 
       const validCareEpisodeId = uuidValidate(careEpisodeId) ? careEpisodeId : uuidv4();
 
       const assessment = TriageAssessmentSchema.parse({
         id: uuidv4(),
         careEpisodeId: validCareEpisodeId,
-        symptoms,
+        symptoms: allSymptoms,
         vitals: parsedVitals,
         clinicalRiskLevel: result.level,
         notes: notes || undefined,
@@ -257,15 +331,109 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
 
       {/* FORM */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 1. SYMPTOM ENTRY */}
+        {/* 1. PATIENT IDENTITY */}
+        <section className="bg-surface border border-outline-variant rounded-2xl p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-sm uppercase tracking-wider text-primary flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">person</span>
+              1. Patient Identification
+            </h3>
+            <span className="text-xs text-on-surface-variant font-medium">
+              {patientNameLocked ? "Verified Patient" : "Enter Patient Details"}
+            </span>
+          </div>
+
+          {patientNameLocked ? (
+            <div className="flex items-center justify-between p-3.5 bg-surface-container rounded-xl border border-outline-variant/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                  {(patientName || "P").charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-on-surface">{patientName || "Identified Patient"}</p>
+                  <p className="text-xs text-on-surface-variant">
+                    {age ? `${age} Yrs` : ""} {sex ? `• ${sex.charAt(0).toUpperCase() + sex.slice(1)}` : ""}
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+                <span className="material-symbols-outlined text-xs">lock</span>
+                Linked Case
+              </span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <div className="sm:col-span-6">
+                <label className="block text-xs font-bold text-on-surface mb-1.5">
+                  Patient Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={patientName}
+                  onChange={(e) => setPatientName(e.target.value)}
+                  placeholder="e.g. Sunita Mondal"
+                  className="w-full h-11 px-3.5 rounded-xl border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary bg-surface-container-lowest font-body-md text-sm placeholder:text-on-surface-variant/70 outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="block text-xs font-bold text-on-surface mb-1.5">
+                  Age (Years) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  max="120"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  placeholder="e.g. 28"
+                  className="w-full h-11 px-3.5 rounded-xl border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary bg-surface-container-lowest font-body-md text-sm placeholder:text-on-surface-variant/70 outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="block text-xs font-bold text-on-surface mb-1.5">
+                  Sex
+                </label>
+                <select
+                  value={sex}
+                  onChange={(e) => setSex(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary bg-surface-container-lowest font-body-md text-sm text-on-surface outline-none"
+                >
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* 2. SYMPTOM ENTRY */}
         <section className="bg-surface border border-outline-variant rounded-2xl p-5 shadow-xs">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-sm uppercase tracking-wider text-primary">
-              1. Symptom Entry
+              2. Symptom Entry
             </h3>
             <span className="text-xs text-on-surface-variant font-medium">
               Select symptoms to calculate severity
             </span>
+          </div>
+
+          {/* Free-text Presenting Complaint / Symptoms */}
+          <div className="mb-4">
+            <label className="block text-xs font-bold text-on-surface mb-1.5">
+              Presenting Symptoms & Complaints (Free-text):
+            </label>
+            <textarea
+              rows={3}
+              value={freetextSymptoms}
+              onChange={(e) => setFreetextSymptoms(e.target.value)}
+              placeholder="Enter patient symptoms or complaints here (e.g. persistent high fever for 3 days, chest pain, nausea)... You can also select chips below to append."
+              className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/70 leading-relaxed resize-none"
+            />
           </div>
 
           <div className="relative mb-3">
@@ -274,7 +442,7 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
             </span>
             <input
               className="w-full h-11 pl-10 pr-4 rounded-xl border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary bg-surface-container-lowest font-body-md text-sm placeholder:text-on-surface-variant"
-              placeholder="Search or type a symptom and press Enter..."
+              placeholder="Search or type a specific symptom and press Enter..."
               type="text"
               value={symptomInput}
               onChange={(e) => setSymptomInput(e.target.value)}
@@ -373,11 +541,11 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
           </div>
         </section>
 
-        {/* 2. CLINICAL VITALS */}
+        {/* 3. CLINICAL VITALS */}
         <section className="bg-surface border border-outline-variant rounded-2xl p-5 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-sm uppercase tracking-wider text-primary">
-              2. Vital Signs Measurements
+              3. Vital Signs Measurements
             </h3>
             <span className="text-xs text-on-surface-variant font-medium">
               Vitals thresholds drive automatic risk calculation
@@ -442,7 +610,7 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
           </div>
         </section>
 
-        {/* 3. NOTES */}
+        {/* 4. NOTES */}
         <section className="bg-surface border border-outline-variant rounded-2xl overflow-hidden shadow-xs">
           <button
             type="button"
@@ -450,7 +618,7 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
             className="flex items-center justify-between w-full p-4 hover:bg-slate-50 transition"
           >
             <span className="font-bold text-sm uppercase tracking-wider text-primary">
-              3. Clinical Observations & Notes
+              4. Clinical Observations & Notes
             </span>
             <span
               className={`material-symbols-outlined text-on-surface-variant transition-transform ${
@@ -482,7 +650,11 @@ export function TriageForm({ careEpisodeId, workerId, onSubmitted }: TriageFormP
         {/* SUBMIT BUTTON */}
         <button
           type="submit"
-          disabled={submitting || (symptoms.length === 0 && !vitals.spo2 && !vitals.systolicBP)}
+          disabled={
+            submitting ||
+            (!patientNameLocked && (!patientName.trim() || !age)) ||
+            (symptoms.length === 0 && !freetextSymptoms.trim() && !vitals.spo2 && !vitals.systolicBP)
+          }
           className="w-full min-h-[50px] bg-primary text-on-primary rounded-full font-bold text-sm hover:bg-primary-hover active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span className="material-symbols-outlined text-xl">

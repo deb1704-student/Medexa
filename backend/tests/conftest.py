@@ -23,7 +23,9 @@ these tests are skipped, not failed, if that database isn't reachable,
 so the rest of the suite stays fast and dependency-free by default.
 """
 
-test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+from sqlalchemy.pool import NullPool
+
+test_engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool)
 TestSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
 
 

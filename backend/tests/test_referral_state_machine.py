@@ -79,3 +79,19 @@ def test_every_non_terminal_state_has_at_least_one_exit():
     for state, transitions in LEGAL_TRANSITIONS.items():
         if state not in terminal:
             assert len(transitions) > 0, f"{state} has no legal exit transitions"
+
+
+def test_discharge_and_close_transitions_are_legal():
+    """Clinicians at CHC / Hospital can discharge/close patients from active care states."""
+    for from_state in [
+        ReferralState.SENT,
+        ReferralState.RECEIVED,
+        ReferralState.ACCEPTED,
+        ReferralState.CONSULTED,
+        ReferralState.REFERRED_BACK,
+        ReferralState.FOLLOW_UP_COMPLETED,
+        ReferralState.EMERGENCY_ESCALATED,
+    ]:
+        validate_transition(from_state, ReferralState.CLOSED)
+        if from_state in [ReferralState.SENT, ReferralState.RECEIVED, ReferralState.ACCEPTED, ReferralState.CONSULTED]:
+            validate_transition(from_state, ReferralState.REFERRED_BACK)

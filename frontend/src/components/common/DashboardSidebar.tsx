@@ -1,4 +1,4 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { SyncIndicator } from "@/components/common/SyncIndicator";
 import { BrandMark } from "@/components/common/BrandMark";
 import { useAuth } from "@/auth/auth";
@@ -13,7 +13,7 @@ interface NavItemConfig {
   roles: Role[];
 }
 
-// ASHA FRONT-LINE NAV ORDER (1. Digital Triage, 2. Village Referral)
+// ASHA FRONT-LINE NAV ORDER (1. Digital Triage, 2. Village Referral, 3. Medicine Availability)
 const ASHA_NAV_ITEMS: NavItemConfig[] = [
   {
     label: "Digital Triage",
@@ -27,6 +27,13 @@ const ASHA_NAV_ITEMS: NavItemConfig[] = [
     labelKey: "villageReferrals",
     icon: "volunteer_activism",
     path: "/dashboard/referrals/asha?view=referral",
+    roles: ["ASHA"],
+  },
+  {
+    label: "Medicine Availability",
+    labelKey: "medicines",
+    icon: "medication",
+    path: "/dashboard/asha/medicines",
     roles: ["ASHA"],
   },
 ];
@@ -148,6 +155,26 @@ export function DashboardSidebar() {
     return tPortal("healthcarePortal", "Healthcare Portal", language);
   };
 
+  const location = useLocation();
+
+  const isItemActive = (targetPath: string, defaultActive: boolean) => {
+    if (targetPath.includes("?")) {
+      const [targetBase, targetQuery] = targetPath.split("?");
+      if (location.pathname !== targetBase) return false;
+      const targetParams = new URLSearchParams(targetQuery);
+      const currentParams = new URLSearchParams(location.search);
+      for (const [k, v] of targetParams.entries()) {
+        const currentVal = currentParams.get(k);
+        if (!currentVal && targetBase.includes("/asha") && k === "view" && v === "triage") {
+          continue;
+        }
+        if (currentVal !== v) return false;
+      }
+      return true;
+    }
+    return defaultActive;
+  };
+
   return (
     <aside className="fixed left-0 top-0 hidden h-screen w-64 flex-col border-r border-outline-variant bg-surface md:flex">
       {/* BRAND */}
@@ -184,13 +211,14 @@ export function DashboardSidebar() {
               key={item.path}
               to={item.path}
               end={item.path === "/dashboard"}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-full px-5 py-3 transition ${
-                  isActive
+              className={({ isActive }) => {
+                const active = isItemActive(item.path, isActive);
+                return `flex items-center gap-3 rounded-full px-5 py-3 transition ${
+                  active
                     ? "bg-secondary-container text-primary font-semibold shadow-xs"
                     : "text-on-surface-variant hover:bg-surface-container-highest"
-                }`
-              }
+                }`;
+              }}
             >
               <span className="material-symbols-outlined text-xl">
                 {item.icon}
