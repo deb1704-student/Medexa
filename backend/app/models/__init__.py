@@ -23,3 +23,4 @@ from app.models.continuity import (  # noqa: F401
     FollowUpTask,
 )
 from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.sync_ledger import SyncIdempotencyKey

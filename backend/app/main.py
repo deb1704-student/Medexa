@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, patients, care_episodes, triage, referrals, facilities, dashboard, continuity
+from app.routers import auth, care_episodes, continuity, dashboard, facilities, patients, referrals, triage, sync
 
 app = FastAPI(
     title="Medexa API",
@@ -35,6 +35,7 @@ app.include_router(referrals.router)
 app.include_router(facilities.router)
 app.include_router(dashboard.router)
 app.include_router(continuity.router)
+app.include_router(sync.router, prefix="/api/v1")
 
 
 @app.get("/health")
@@ -43,4 +44,3 @@ async def health_check():
     NetworkFirst PWA cache to detect true reachability, not just DNS
     resolution."""
     return {"status": "ok"}
-

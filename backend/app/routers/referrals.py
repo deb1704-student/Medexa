@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,6 +21,10 @@ from app.schemas.continuity import (
     ReferralFailureReasonRequest,
 )
 from app.schemas.auth import TokenPayload
+from app.schemas.fhir import (
+    FHIRBundle, FHIRBundleEntry, FHIRMeta,
+    FHIRCodeableConcept, FHIRCoding, FHIRReference
+)
 from app.services.referral_state_machine import validate_transition, IllegalTransitionError
 from app.services.sla_engine import compute_initial_sla_due_dates
 from app.services.sla_rescue_engine import check_and_trigger_rescue, resolve_rescue_actions_for_referral
@@ -219,12 +223,6 @@ async def _apply_referral_transition(
     payload: ReferralTransitionRequest,
     current_user: TokenPayload,
 ) -> Referral:
-    """Apply a referral transition while holding a row lock.
-
-    The lock serializes concurrent transitions for the same referral.
-    This prevents two workers from both validating the same old state and
-    then writing incompatible next states.
-    """
     result = await db.execute(
         select(Referral)
         .where(Referral.id == referral_id)
@@ -248,7 +246,6 @@ async def _apply_referral_transition(
     if already_applied is not None:
         return referral
 
-    # Idempotent: If referral is already in the requested target state, return as success
     if referral.current_state == payload.to_state:
         return referral
 
@@ -301,7 +298,6 @@ async def transition_referral(
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Authoritative transition endpoint with transaction-level locking."""
     return await _apply_referral_transition(db, referral_id, payload, current_user)
 
 
@@ -343,7 +339,6 @@ async def set_failure_reason(
     await db.commit()
     return await _get_referral_with_history(db, referral_id)
 
-
 @router.post("/back-referral", response_model=BackReferralOut, status_code=201)
 async def create_back_referral(
     payload: BackReferralCreate,
@@ -351,32 +346,56 @@ async def create_back_referral(
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    existing = await db.get(BackReferral, payload.id)
-    if existing is not None:
-        if response is not None:
-            response.status_code = status.HTTP_200_OK
-        return existing
-
     referral = await db.get(Referral, payload.referral_id)
     if referral is None:
         raise HTTPException(status_code=404, detail="Referral not found")
     _ensure_referral_access(referral, current_user)
 
-    # Idempotent check: if a back-referral already exists for this referral, return it directly
-    stmt = (
-        select(BackReferral)
-        .where(BackReferral.referral_id == payload.referral_id)
-        .execution_options(populate_existing=True)
+    # 1. State machine transition to REFERRED_BACK
+    terminal_values = {
+        s.value if hasattr(s, "value") else str(s)
+        for s in TERMINAL_STATES
+    }
+    current_val = (
+        referral.current_state.value
+        if hasattr(referral.current_state, "value")
+        else str(referral.current_state)
     )
+
+    if current_val not in terminal_values:
+        referral.current_state = ReferralState.REFERRED_BACK
+        referral.sync_status = "synced"
+        db.add(
+            ReferralStateTransition(
+                id=str(uuid.uuid4()),
+                referral_id=referral.id,
+                from_state=referral.current_state,
+                to_state=ReferralState.REFERRED_BACK,
+                changed_by=current_user.sub if hasattr(current_user, "sub") else "system",
+                changed_at=datetime.now(timezone.utc),
+                device_local_timestamp=datetime.now(timezone.utc),
+                note=payload.instructions or payload.outcome or "Discharged with back-referral to ASHA",
+            )
+        )
+        await resolve_rescue_actions_for_referral(db, referral.id)
+
+    # 2. Idempotency checks for BackReferral record
+    existing = await db.get(BackReferral, payload.id)
+    if existing is not None:
+        if response is not None:
+            response.status_code = status.HTTP_200_OK
+        await db.commit()
+        return existing
+
+    stmt = select(BackReferral).where(BackReferral.referral_id == payload.referral_id)
     existing_by_ref = (await db.execute(stmt)).scalar_one_or_none()
     if existing_by_ref is not None:
         if response is not None:
             response.status_code = status.HTTP_200_OK
-        if referral.current_state not in TERMINAL_STATES:
-            referral.current_state = ReferralState.CLOSED
-            await db.commit()
+        await db.commit()
         return existing_by_ref
 
+    # 3. Create BackReferral entity
     back_referral = BackReferral(
         id=payload.id,
         referral_id=payload.referral_id,
@@ -403,22 +422,6 @@ async def create_back_referral(
     )
     db.add(follow_up)
 
-    # Transition the referral state to CLOSED in the authoritative state machine
-    if referral.current_state not in TERMINAL_STATES:
-        transition = ReferralStateTransition(
-            id=str(uuid.uuid4()),
-            referral_id=referral.id,
-            from_state=referral.current_state,
-            to_state=ReferralState.CLOSED,
-            changed_by=current_user.sub,
-            changed_at=datetime.now(timezone.utc),
-            note=payload.outcome or "Discharged with back-referral to ASHA",
-        )
-        db.add(transition)
-        referral.current_state = ReferralState.CLOSED
-        referral.sync_status = "synced"
-        await resolve_rescue_actions_for_referral(db, referral.id)
-
     try:
         await db.commit()
     except IntegrityError:
@@ -439,7 +442,6 @@ async def create_back_referral(
     await db.refresh(back_referral)
     return back_referral
 
-
 class SyncTransitionPayload(ReferralTransitionRequest):
     referral_id: str
     from_state: str | None = None
@@ -451,7 +453,6 @@ async def sync_referral_transition(
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Offline sync entry point; uses the same locked transition path."""
     return await _apply_referral_transition(db, payload.referral_id, payload, current_user)
 
 
@@ -462,9 +463,6 @@ async def delete_referral(
     current_user: TokenPayload = Depends(require_roles(UserRole.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin-only soft delete with retention window gating.
-    Normal operations cannot purge records. Completed records past the retention
-    window (default 30 days) become eligible for deletion, or admin can pass force=True."""
     referral = await _get_referral_with_history(db, referral_id)
     if referral is None:
         raise HTTPException(status_code=404, detail="Referral not found")
@@ -508,3 +506,80 @@ async def delete_referral(
     }
 
 
+@router.get("/{referral_id}/fhir", response_model=FHIRBundle, tags=["Interoperability (FHIR R4)"])
+async def export_referral_as_fhir(
+    referral_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    referral = await _get_referral_with_history(db, referral_id)
+    if not referral:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Referral {referral_id} not found"
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    patient = referral.patient
+    entries = []
+
+    patient_res = {
+        "resourceType": "Patient",
+        "id": patient.id,
+        "name": [{"text": patient.full_name}],
+        "gender": patient.sex.lower() if patient.sex in ["MALE", "FEMALE"] else "other",
+        "address": [{"text": patient.village_or_ward or "Unknown"}],
+    }
+    if patient.phone:
+        patient_res["telecom"] = [{"system": "phone", "value": patient.phone}]
+
+    entries.append(FHIRBundleEntry(
+        fullUrl=f"urn:uuid:{patient.id}",
+        resource=patient_res
+    ))
+
+    urgency_val = getattr(referral, "clinical_urgency", getattr(referral, "urgency", "ROUTINE"))
+    priority_val = str(getattr(referral, "priority", "ROUTINE"))
+
+    priority_map = {
+        "EMERGENCY": "stat",
+        "URGENT": "urgent",
+        "ROUTINE": "routine"
+    }
+
+    service_request_res = {
+        "resourceType": "ServiceRequest",
+        "id": referral.id,
+        "meta": {
+            "versionId": "1",
+            "lastUpdated": referral.created_at.isoformat() if referral.created_at else now_iso,
+            "profile": ["https://nrces.in/ndhm/fhir/r4/StructureDefinition/ServiceRequest"]
+        },
+        "status": "active" if referral.current_state != "CLOSED" else "completed",
+        "intent": "order",
+        "priority": priority_map.get(priority_val, "routine"),
+        "subject": {"reference": f"urn:uuid:{patient.id}", "display": patient.full_name},
+        "requester": {"reference": f"Facility/{referral.from_facility_id}"},
+        "performer": [{"reference": f"Facility/{referral.to_facility_id}"}],
+        "authoredOn": referral.created_at.isoformat() if referral.created_at else now_iso,
+        "reasonCode": [{
+            "coding": [{
+                "system": "http://snomed.info/sct",
+                "code": "3457005",
+                "display": str(urgency_val)
+            }],
+            "text": f"Urgency: {urgency_val}"
+        }]
+    }
+    entries.append(FHIRBundleEntry(
+        fullUrl=f"urn:uuid:{referral.id}",
+        resource=service_request_res
+    ))
+
+    return FHIRBundle(
+        id=f"bundle-{referral.id}",
+        meta={
+            "lastUpdated": now_iso,
+            "profile": ["https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle"]
+        },
+        entry=entries
+    )

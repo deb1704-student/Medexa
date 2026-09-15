@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { z } from "zod";
 import { v4 as uuidv4, validate as uuidValidate } from "uuid";
 import { TriageAssessmentSchema, type ClinicalRiskLevelT } from "@/models/careEpisode";
+import { useSpeechRecognition } from "../../hooks/useSpeechRecognition";
 import { db, writeAndQueue } from "@/sync/db";
 import {
   calculateTriageRisk,
@@ -73,6 +74,19 @@ export function TriageForm({
 
   const [freetextSymptoms, setFreetextSymptoms] = useState("");
   const [symptoms, setSymptoms] = useState<string[]>([]);
+  // Multilingual Voice Assistance (English, Hindi, Bengali)
+  const [voiceLang, setVoiceLang] = useState<"en-IN" | "bn-IN" | "hi-IN">("en-IN");
+  const { isListening, transcript, startListening, stopListening, error: speechError } = useSpeechRecognition(voiceLang);
+
+  // Append voice transcript to freetext symptoms as speech is recognized
+  useEffect(() => {
+    if (transcript) {
+      setFreetextSymptoms((prev) => {
+        const cleaned = prev.trim();
+        return cleaned ? `${cleaned} ${transcript}` : transcript;
+      });
+    }
+  }, [transcript]);
   const [symptomInput, setSymptomInput] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState("");
@@ -424,14 +438,75 @@ export function TriageForm({
 
           {/* Free-text Presenting Complaint / Symptoms */}
           <div className="mb-4">
-            <label className="block text-xs font-bold text-on-surface mb-1.5">
-              Presenting Symptoms & Complaints (Free-text):
-            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+              <label className="block text-xs font-bold text-on-surface">
+                Presenting Symptoms & Complaints (Free-text):
+              </label>
+
+              {/* Multilingual Voice Assistance Controls for ASHA Frontline Usability */}
+              <div className="flex items-center gap-1.5">
+                <div className="relative inline-flex items-center">
+                  <select
+                    value={voiceLang}
+                    onChange={(e) => setVoiceLang(e.target.value as "en-IN" | "bn-IN" | "hi-IN")}
+                    className="h-8 pl-2 pr-7 text-xs font-semibold rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+                    title="Select voice recognition language"
+                    aria-label="Select voice recognition language"
+                  >
+                    <option value="en-IN">English (India)</option>
+                    <option value="hi-IN">हिन्दी (Hindi)</option>
+                    <option value="bn-IN">বাংলা (Bengali)</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-1.5 material-symbols-outlined text-xs text-on-surface-variant">
+                    expand_more
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={isListening ? stopListening : startListening}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs ${
+                    isListening
+                      ? "bg-red-600 text-white hover:bg-red-700 animate-pulse border border-red-700"
+                      : "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
+                  }`}
+                  title={isListening ? "Stop voice dictation" : "Start hands-free voice dictation"}
+                  aria-label={isListening ? "Stop voice dictation" : "Start voice dictation"}
+                >
+                  <span className="material-symbols-outlined text-base">
+                    {isListening ? "mic" : "mic"}
+                  </span>
+                  <span>{isListening ? "Listening..." : "Dictate"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Real-time Listening Banner */}
+            {isListening && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold animate-pulse">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600"></span>
+                </span>
+                <span>
+                  Listening in {voiceLang === "bn-IN" ? "Bengali (বাংলা)" : voiceLang === "hi-IN" ? "Hindi (हिन्दी)" : "English (India)"}... Speak patient symptoms clearly.
+                </span>
+              </div>
+            )}
+
+            {/* Speech Recognition Error Banner */}
+            {speechError && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium">
+                <span className="material-symbols-outlined text-base text-amber-600">error</span>
+                <span>Voice input note: {speechError}</span>
+              </div>
+            )}
+
             <textarea
               rows={3}
               value={freetextSymptoms}
               onChange={(e) => setFreetextSymptoms(e.target.value)}
-              placeholder="Enter patient symptoms or complaints here (e.g. persistent high fever for 3 days, chest pain, nausea)... You can also select chips below to append."
+              placeholder="Enter patient symptoms or complaints here (e.g. persistent high fever for 3 days, chest pain, nausea)... Or click 'Dictate' to speak in English, Hindi, or Bengali."
               className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/70 leading-relaxed resize-none"
             />
           </div>
