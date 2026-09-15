@@ -1,8 +1,8 @@
 # Medexa — Feature Matrix & Functional System Audit
 
-> **Smart Care Continuity for Rural and Underserved Healthcare**  
-> Problem Statement ID: **SIH26133** | Smart India Hackathon 2026  
-> Date of Audit: September 2026 | Environment: Windows / PostgreSQL 17 / FastAPI / React 18 PWA  
+> **Smart Care Continuity for Rural and Underserved Healthcare**
+> Problem Statement ID: **SIH26133** | Smart India Hackathon 2026
+> Date of Audit: September 2026 | Environment: Windows / PostgreSQL 17 / FastAPI / React 18 PWA
 
 ---
 
@@ -50,7 +50,7 @@ Medexa is an offline-first public healthcare continuity and referral tracking pl
 ### 4. 🔄 Closed-Loop 11-State Referral State Machine
 - **Strict State Progression (`referral_state_machine.py`)**:
   ```text
-  DRAFT ➔ SENT ➔ RECEIVED ➔ ACCEPTED ➔ APPOINTMENT_QUEUED ➔ 
+  DRAFT ➔ SENT ➔ RECEIVED ➔ ACCEPTED ➔ APPOINTMENT_QUEUED ➔
   ARRIVED ➔ CONSULTED ➔ REFERRED_BACK ➔ FOLLOW_UP_DUE ➔ FOLLOW_UP_COMPLETED ➔ CLOSED
   ```
   *(Alternative valid branch states: `REJECTED`, `EXPIRED`, `EMERGENCY_ESCALATED`)*.

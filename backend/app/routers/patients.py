@@ -108,4 +108,3 @@ async def delete_patient(
     )
     await db.commit()
     return {"success": True, "message": f"Patient {patient_id} soft-deleted successfully", "deleted_at": patient.deleted_at}
-
